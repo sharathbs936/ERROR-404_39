@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediFind — Smart Medicine Locator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Manrope:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+  <!-- Top bar (text only, no logo) -->
+  <header class="topbar">
+    <div class="brand" id="brand-home">
+      <div class="brand-text">
+        <strong>MediFind</strong>
+        <small>Smart medicine locator</small>
+      </div>
+    </div>
+    <div class="top-actions">
+      <select id="theme-select" title="Theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="auto">Auto</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside id="side-nav" class="side-nav hidden">
+    <div class="side-title">Navigate</div>
+    <button class="side-btn" data-tab="home">🏠 Home</button>
+    <button class="side-btn" data-tab="profile">👤 Profile</button>
+    <button class="side-btn" data-tab="report">🚩 Report</button>
+    <button class="side-btn" data-tab="settings">⚙️ Settings</button>
+  </aside>
+
+  <!-- Landing -->
+  <section id="landing-view" class="view">
+    <div class="landing-center card glass">
+      <h1 class="landing-title">MediFind</h1>
+      <p class="landing-tag">LOCATE • COMPARE • RECOVER</p>
+      <div class="row landing-actions">
+        <button id="go-locator" class="btn xl">👤 I’m looking for a medicine</button>
+        <button id="go-pharmacy" class="btn outline xl">🏪 I’m a pharmacy</button>
+      </div>
+    </div>
+
+    <div id="resume-card" class="card lg glass hidden">
+      <h3>Continue where you left off</h3>
+      <div id="resume-buttons" class="row" style="gap:10px;flex-wrap:wrap"></div>
+      <div class="row" style="gap:10px;margin-top:8px">
+        <button id="clear-session" class="btn outline sm">Clear saved sessions</button>
+      </div>
+      <small class="hint">No auto-login. Pick your role each time.</small>
+    </div>
+  </section>
+
+  <!-- Consumer Login -->
+  <section id="login-view" class="view hidden">
+    <div class="card lg glass">
+      <button class="link back-btn" id="back-to-landing-1">← Back</button>
+      <h2>Login</h2>
+      <div class="form">
+        <label>Username</label>
+        <input id="login-username" type="text" placeholder="your_username"/>
+        <label>Password</label>
+        <input id="login-password" type="password" placeholder="••••••••"/>
+        <button id="login-submit" class="btn">Continue</button>
+        <small class="hint">New here? <button id="go-register" class="link">Create an account</button></small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Consumer Register -->
+  <section id="register-view" class="view hidden">
+    <div class="card lg glass">
+      <button class="link back-btn" id="back-to-login">← Back to login</button>
+      <h2>Create account</h2>
+      <div class="form">
+        <label>Username</label>
+        <input id="reg-username" type="text" placeholder="choose a username"/>
+        <label>Password</label>
+        <input id="reg-password" type="password" placeholder="min 4 characters"/>
+        <label>Confirm Password</label>
+        <input id="reg-confirm" type="password" placeholder="repeat password"/>
+        <label>Display Name (optional)</label>
+        <input id="reg-name" type="text" placeholder="Your name"/>
+        <label>Contact (optional)</label>
+        <input id="reg-contact" type="text" placeholder="Phone or email"/>
+        <button id="reg-submit" class="btn">Register</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Home -->
+  <main id="home-view" class="view hidden">
+    <section class="search-section">
+      <div class="search-bar glass neon">
+        <input id="search-input" class="search-xl" type="text" placeholder="Search medicine (e.g., Paracetamol, Dolo 650)" autocomplete="off"/>
+        <div class="tool-group">
+          <button id="mic-btn" class="tool-btn" title="Voice">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-7 8a7 7 0 1 0 14 0h-2a5 5 0 1 1-10 0H5Zm6 7v3h2v-3h-2Z" fill="currentColor"/></svg>
+          </button>
+          <label for="camera-input" class="tool-btn" title="Scan">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 4h4V2H4a2 2 0 0 0-2 2v4h2V4Zm12-2v2h4v4h2V4a2 2 0 0 0-2-2h-4ZM2 16v4a2 2 0 0 0 2 2h4v-2H4v-4H2Zm20 0h-2v4h-4v2h4a2 2 0 0 0 2-2v-4ZM7 8h10a1 1 0 0 1 1 1v6a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V9a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>
+          </label>
+          <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden"/>
+        </div>
+        <div id="search-history" class="dropdown hidden"></div>
+      </div>
+
+      <div class="row wrap gap8">
+        <small class="hint" id="origin-hint">Ranking by Recommended (AI). Using precise location if available.</small>
+        <div class="row wrap gap8 ml-auto">
+          <button id="gps-refresh" class="btn outline sm">Improve GPS</button>
+          <button id="gps-recenter" class="btn outline sm">Recenter</button>
+          <button id="gps-manual" class="btn outline sm">Drag My Pin</button>
+          <select id="sort-select" title="Sort">
+            <option value="recommended">Recommended (AI)</option>
+            <option value="price">Cheapest first</option>
+            <option value="distance">Nearest first</option>
+          </select>
+          <button id="route-top-btn" class="btn outline sm">Route to Top 3</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="content-split">
+      <div class="left-pane">
+        <section class="results">
+          <h3>Top matches</h3>
+          <div id="results-list" class="cards">
+            <div class="skel"></div>
+            <div class="skel"></div>
+            <div class="skel"></div>
+          </div>
+        </section>
+      </div>
+      <div class="right-pane">
+        <div id="map" class="glass"></div>
+        <div id="location-status" class="status">Detecting your location…</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Profile -->
+  <section id="profile-view" class="view hidden">
+    <div class="card lg glass">
+      <div class="profile-header">
+        <label class="avatar" title="Click to change avatar">
+          <input id="avatar-file" type="file" accept="image/*" class="hidden">
+          <img id="avatar-img" class="hidden" alt="">
+          <span id="avatar-fallback">🙂</span>
+        </label>
+        <div style="flex:1">
+          <div id="profile-name" class="profile-name">Your Name</div>
+          <div id="profile-contact" class="profile-contact">Contact</div>
+          <div id="profile-username" class="hint"></div>
+        </div>
+        <div class="profile-actions">
+          <button id="edit-profile-btn" class="btn sm outline">Edit</button>
+          <button id="change-pass-btn" class="btn sm outline">Change Password</button>
+        </div>
+      </div>
+
+      <div id="edit-profile-panel" class="card glass hidden mt12">
+        <h3>Edit profile</h3>
+        <div class="form">
+          <label>Name</label>
+          <input id="edit-name" type="text" placeholder="Your name"/>
+          <label>Phone or Email</label>
+          <input id="edit-contact" type="text" placeholder="Contact"/>
+          <div class="row gap8">
+            <button id="save-profile-btn" class="btn">Save</button>
+            <button id="cancel-profile-btn" class="btn outline">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="change-pass-panel" class="card glass hidden mt12">
+        <h3>Change password</h3>
+        <div class="form">
+          <label>Current password</label>
+          <input id="cur-pass" type="password" placeholder="current"/>
+          <label>New password</label>
+          <input id="new-pass" type="password" placeholder="min 4 chars"/>
+          <label>Confirm new password</label>
+          <input id="new-pass2" type="password" placeholder="repeat"/>
+          <div class="row gap8">
+            <button id="save-pass-btn" class="btn">Update Password</button>
+            <button id="cancel-pass-btn" class="btn outline">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="card glass">
+        <h3>Search history</h3>
+        <div id="history-list" class="chips"></div>
+        <div class="row gap8 mt8">
+          <button id="see-all-history" class="btn sm">See all</button>
+          <button id="clear-history" class="btn outline sm">Clear</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="row space-between">
+        <span class="hint">See something off? Tell us.</span>
+        <button id="go-report" class="btn outline">Open Report</button>
+      </div>
+
+      <div class="divider"></div>
+      <button id="logout-btn" class="btn outline full">Sign out</button>
+    </div>
+  </section>
+
+  <!-- History Modal -->
+  <div id="history-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>Full search history</h3>
+        <button id="hist-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="history-full" class="list"></div>
+    </div>
+  </div>
+
+  <!-- Report -->
+  <section id="report-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>Report an issue</h2>
+      <div class="form">
+        <label>Category</label>
+        <select id="report-type">
+          <option value="wrong_price">Wrong price</option>
+          <option value="closed_store">Store closed / not found</option>
+          <option value="location_issue">Location inaccurate</option>
+          <option value="bug">App bug</option>
+          <option value="other">Other</option>
+        </select>
+        <label>Describe the issue</label>
+        <textarea id="report-msg" rows="5" placeholder="What happened? Be specific."></textarea>
+        <label class="checkline"><input id="report-include-loc" type="checkbox"/> Include my current location</label>
+        <div class="row gap8">
+          <button id="report-submit" class="btn">Submit Report</button>
+          <button id="report-cancel" class="btn outline">Cancel</button>
+        </div>
+        <small class="hint" id="report-status"></small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="settings-view" class="view hidden">
+    <div class="card lg glass">
+      <h3>Appearance</h3>
+      <div class="row settings-row fancy-themes">
+        <button class="theme-card" id="pick-dark"><div class="preview dark"></div><span>Dark</span></button>
+        <button class="theme-card" id="pick-light"><div class="preview light"></div><span>Light</span></button>
+        <button class="theme-card" id="pick-auto"><div class="preview auto"></div><span>Auto</span></button>
+        <select id="theme-select-settings" title="Theme" class="ml-auto">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+      <p class="hint">Instant preview. Saves on this device.</p>
+
+      <div class="divider"></div>
+
+      <h3>Feedback</h3>
+      <div class="form">
+        <textarea id="feedback-text" rows="4" placeholder="Tell us what to improve…"></textarea>
+        <div class="row gap8">
+          <button id="feedback-save" class="btn">Save Feedback</button>
+          <button id="feedback-clear" class="btn outline">Clear</button>
+        </div>
+        <small class="hint" id="feedback-status"></small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pharmacy Login -->
+  <section id="pharmacy-login-view" class="view hidden">
+    <div class="card lg glass">
+      <button class="link back-btn" id="back-to-landing-2">← Back</button>
+      <h2>Pharmacy Portal — Login</h2>
+      <div class="form">
+        <label>Store Username</label>
+        <input id="store-login-user" type="text" placeholder="store_username"/>
+        <label>Password</label>
+        <input id="store-login-pass" type="password" placeholder="••••••••"/>
+        <button id="store-login-btn" class="btn">Enter Dashboard</button>
+        <small class="hint">New store? <button id="go-store-register" class="link">Register your pharmacy</button></small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pharmacy Register -->
+  <section id="pharmacy-register-view" class="view hidden">
+    <div class="card lg glass">
+      <button class="link back-btn" id="back-to-store-login">← Back to store login</button>
+      <h2>Register Pharmacy</h2>
+      <div class="form">
+        <label>Store Username</label>
+        <input id="store-reg-user" type="text" placeholder="choose a store username"/>
+        <label>Password</label>
+        <input id="store-reg-pass" type="password" placeholder="min 4 characters"/>
+        <label>Confirm Password</label>
+        <input id="store-reg-confirm" type="password" placeholder="repeat password"/>
+        <label>Store Display Name</label>
+        <input id="store-reg-name" type="text" placeholder="e.g., Apollo Kengeri"/>
+        <label>Store Contact</label>
+        <input id="store-reg-contact" type="text" placeholder="9xxxxxxx or store@example.com"/>
+        <button id="store-reg-submit" class="btn">Register Store</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pharmacy Dashboard -->
+  <section id="pharmacy-dashboard-view" class="view hidden">
+    <div class="card lg glass">
+      <div class="row space-between">
+        <h2>Inventory — <span id="store-label"></span></h2>
+        <div>
+          <button id="export-json" class="btn outline">Export JSON</button>
+          <button id="store-logout-btn" class="btn outline">Sign out</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="card glass mt8">
+        <h3>Store Location, Hours & Publish</h3>
+        <p class="hint">Pin your store, set hours, and publish so users can find you.</p>
+        <div class="grid-3 gap">
+          <div class="stack">
+            <button id="store-use-loc" class="btn">Use My Current Location</button>
+            <label class="checkline"><input type="checkbox" id="store-publish"/> Publish to Medi Locator</label>
+            <div class="hint" id="store-coords">Lat: –, Lon: –</div>
+          </div>
+          <div class="stack">
+            <label class="checkline"><input type="checkbox" id="hours-247"/> Open 24×7</label>
+            <label>Opens at <input id="hours-open" type="time" value="09:00"/></label>
+            <label>Closes at <input id="hours-close" type="time" value="21:00"/></label>
+            <small class="hint">Hours apply daily (demo)</small>
+          </div>
+          <div class="stack">
+            <button id="save-hours" class="btn">Save Hours</button>
+          </div>
+        </div>
+        <div id="store-map" class="map-embed glass mt8"></div>
+      </div>
+
+      <div class="form grid-3 mt8">
+        <input id="med-name" type="text" placeholder="Medicine name"/>
+        <input id="med-qty" type="number" min="0" placeholder="Quantity"/>
+        <input id="med-price" type="number" min="0" step="0.01" placeholder="Price / tablet (₹)"/>
+      </div>
+      <div class="row mt8">
+        <button id="add-item" class="btn">Add / Update</button>
+        <button id="clear-all" class="btn outline ml8">Clear All</button>
+      </div>
+
+      <div class="table-wrap mt12">
+        <table class="table">
+          <thead><tr><th>Medicine</th><th>Qty</th><th>₹/tablet</th><th></th></tr></thead>
+          <tbody id="inv-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toast container -->
+  <div id="toast-wrap" class="toast-wrap"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
+
+
+
