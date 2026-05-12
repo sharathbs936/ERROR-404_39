@@ -32,6 +32,11 @@
   <aside id="side-nav" class="side-nav hidden">
     <div class="side-title">Navigate</div>
     <button class="side-btn" data-tab="home">🏠 Home</button>
+    <button class="side-btn" data-tab="medicines">💊 Medicines</button>
+    <button class="side-btn" data-tab="hospitals">🏥 Hospitals</button>
+    <button class="side-btn" data-tab="aiconsult">🤖 AI Doctor</button>
+    <button class="side-btn" data-tab="medicineorder">📦 Orders</button>
+    <button class="side-btn" data-tab="tracking">📍 Track</button>
     <button class="side-btn" data-tab="profile">👤 Profile</button>
     <button class="side-btn" data-tab="report">🚩 Report</button>
     <button class="side-btn" data-tab="settings">⚙️ Settings</button>
@@ -284,6 +289,56 @@
     </div>
   </section>
 
+  <!-- Hospitals -->
+  <section id="hospitals-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>🏥 Find Hospitals Nearby</h2>
+
+      <div class="search-bar glass neon mt12">
+        <input id="hospital-search-input" class="search-xl" type="text" placeholder="Search hospital by name or specialty (e.g., Cardiology, Apollo)" autocomplete="off"/>
+      </div>
+
+      <div class="row wrap gap8 mt12">
+        <small class="hint">Showing 5 closest hospitals with specialists.</small>
+        <div class="row wrap gap8 ml-auto">
+          <button id="hospitals-refresh-gps" class="btn outline sm">Refresh Location</button>
+          <button id="hospitals-view-bookings" class="btn outline sm">📅 My Bookings</button>
+        </div>
+      </div>
+    </div>
+    <div id="hospitals-list" class="cards mt12"></div>
+  </section>
+
+  <!-- Doctor Modal -->
+  <div id="doctor-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>Select Doctor</h3>
+        <button id="doctor-modal-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="doctor-list" class="list mt8"></div>
+    </div>
+  </div>
+
+  <!-- Booking Modal -->
+  <div id="booking-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <h3>Book Consultation</h3>
+      <div id="booking-form"></div>
+    </div>
+  </div>
+
+  <!-- Booking History Modal -->
+  <div id="bookings-history-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>My Bookings</h3>
+        <button id="bookings-history-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="bookings-history" class="list mt8"></div>
+    </div>
+  </div>
+
   <!-- Pharmacy Login -->
   <section id="pharmacy-login-view" class="view hidden">
     <div class="card lg glass">
@@ -333,43 +388,312 @@
       </div>
       <div class="divider"></div>
 
-      <div class="card glass mt8">
-        <h3>Store Location, Hours & Publish</h3>
-        <p class="hint">Pin your store, set hours, and publish so users can find you.</p>
-        <div class="grid-3 gap">
-          <div class="stack">
-            <button id="store-use-loc" class="btn">Use My Current Location</button>
-            <label class="checkline"><input type="checkbox" id="store-publish"/> Publish to Medi Locator</label>
-            <div class="hint" id="store-coords">Lat: –, Lon: –</div>
+      <!-- Tabs Navigation -->
+      <div class="row gap8 mt8" style="border-bottom:1px solid var(--line);padding-bottom:12px;">
+        <button id="tab-medicines" class="btn outline active" style="border:none;background:transparent;text-decoration:underline;">💊 Medicines</button>
+        <button id="tab-hospitals" class="btn outline" style="border:none;background:transparent;">🏥 Hospital Info</button>
+      </div>
+
+      <!-- Medicines Tab -->
+      <div id="medicines-tab" class="tab-content">
+        <div class="card glass mt8">
+          <h3>Store Location, Hours & Publish</h3>
+          <p class="hint">Pin your store, set hours, and publish so users can find you.</p>
+          <div class="grid-3 gap">
+            <div class="stack">
+              <button id="store-use-loc" class="btn">Use My Current Location</button>
+              <label class="checkline"><input type="checkbox" id="store-publish"/> Publish to Medi Locator</label>
+              <div class="hint" id="store-coords">Lat: –, Lon: –</div>
+            </div>
+            <div class="stack">
+              <label class="checkline"><input type="checkbox" id="hours-247"/> Open 24×7</label>
+              <label>Opens at <input id="hours-open" type="time" value="09:00"/></label>
+              <label>Closes at <input id="hours-close" type="time" value="21:00"/></label>
+              <small class="hint">Hours apply daily (demo)</small>
+            </div>
+            <div class="stack">
+              <button id="save-hours" class="btn">Save Hours</button>
+            </div>
           </div>
-          <div class="stack">
-            <label class="checkline"><input type="checkbox" id="hours-247"/> Open 24×7</label>
-            <label>Opens at <input id="hours-open" type="time" value="09:00"/></label>
-            <label>Closes at <input id="hours-close" type="time" value="21:00"/></label>
-            <small class="hint">Hours apply daily (demo)</small>
+          <div id="store-map" class="map-embed glass mt8"></div>
+        </div>
+
+        <div class="form grid-3 mt8">
+          <input id="med-name" type="text" placeholder="Medicine name"/>
+          <input id="med-qty" type="number" min="0" placeholder="Quantity"/>
+          <input id="med-price" type="number" min="0" step="0.01" placeholder="Price / tablet (₹)"/>
+        </div>
+        <div class="row mt8">
+          <button id="add-item" class="btn">Add / Update</button>
+          <button id="clear-all" class="btn outline ml8">Clear All</button>
+        </div>
+
+        <div class="table-wrap mt12">
+          <table class="table">
+            <thead><tr><th>Medicine</th><th>Qty</th><th>₹/tablet</th><th></th></tr></thead>
+            <tbody id="inv-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Hospital Info Tab -->
+      <div id="hospitals-tab" class="tab-content hidden">
+        <div class="card glass mt8">
+          <h3>Hospital Information</h3>
+          <p class="hint">Add hospital details to help users find your services.</p>
+
+          <div class="form mt12">
+            <label>Hospital Name</label>
+            <input id="hosp-name" type="text" placeholder="Hospital name"/>
+
+            <label>Specialties (comma-separated)</label>
+            <input id="hosp-specialties" type="text" placeholder="e.g., Cardiology, Neurology, Pediatrics"/>
+
+            <label>Contact Number</label>
+            <input id="hosp-contact" type="text" placeholder="Phone number"/>
+
+            <label>Address</label>
+            <textarea id="hosp-address" placeholder="Hospital address..." rows="3"></textarea>
+
+            <label>Open 24/7?</label>
+            <label class="checkline"><input type="checkbox" id="hosp-247"/> Yes</label>
+
+            <div id="hosp-hours" class="hidden">
+              <label>Opening Hours</label>
+              <div class="row gap8">
+                <input id="hosp-open" type="time" value="09:00"/>
+                <input id="hosp-close" type="time" value="21:00"/>
+              </div>
+            </div>
+
+            <div class="row gap8 mt12">
+              <button id="save-hospital" class="btn">Save Hospital Info</button>
+              <button id="clear-hospital" class="btn outline">Clear</button>
+            </div>
           </div>
-          <div class="stack">
-            <button id="save-hours" class="btn">Save Hours</button>
+
+          <div id="hospital-info-display" class="card glass mt12 hidden">
+            <h4>Saved Hospital Info</h4>
+            <div id="hospital-info-content"></div>
           </div>
         </div>
-        <div id="store-map" class="map-embed glass mt8"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Doctor Consultation -->
+  <section id="aiconsult-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>🤖 AI Doctor Consultation</h2>
+      <p class="hint mt8">Book an AI-assisted consultation with doctors from nearby hospitals.</p>
+
+      <div class="search-bar glass neon mt12">
+        <input id="ai-hospital-search" class="search-xl" type="text" placeholder="Search hospital..." autocomplete="off"/>
       </div>
 
-      <div class="form grid-3 mt8">
-        <input id="med-name" type="text" placeholder="Medicine name"/>
-        <input id="med-qty" type="number" min="0" placeholder="Quantity"/>
-        <input id="med-price" type="number" min="0" step="0.01" placeholder="Price / tablet (₹)"/>
+      <div class="row wrap gap8 mt12">
+        <small class="hint">Showing 5 closest hospitals with AI-assisted doctors.</small>
+        <button id="ai-refresh-gps" class="btn outline sm ml-auto">Refresh Location</button>
       </div>
-      <div class="row mt8">
-        <button id="add-item" class="btn">Add / Update</button>
-        <button id="clear-all" class="btn outline ml8">Clear All</button>
+    </div>
+    <div id="ai-hospitals-list" class="cards mt12"></div>
+  </section>
+
+  <!-- AI Doctor Modal -->
+  <div id="ai-doctor-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>AI-Assisted Doctors</h3>
+        <button id="ai-doctor-modal-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="ai-doctor-list" class="list mt8"></div>
+    </div>
+  </div>
+
+  <!-- AI Symptom Input Modal -->
+  <div id="ai-symptom-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <h3>AI Medical Analysis</h3>
+      <div class="form mt8">
+        <label>Your Symptoms</label>
+        <textarea id="ai-symptoms" placeholder="Describe your symptoms (e.g., fever, cough, body pain)..." rows="4"></textarea>
+        <label>Duration</label>
+        <input id="ai-duration" type="text" placeholder="e.g., 2 days, 1 week"/>
+        <label>Severity</label>
+        <select id="ai-severity">
+          <option value="mild">Mild</option>
+          <option value="moderate">Moderate</option>
+          <option value="severe">Severe</option>
+        </select>
+        <div class="row gap8 mt12">
+          <button id="ai-analyze-btn" class="btn">Analyze</button>
+          <button id="ai-symptom-cancel" class="btn outline">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Consultation Booking Modal -->
+  <div id="ai-consultation-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <h3>Book AI Consultation</h3>
+      <div id="ai-booking-form" class="form mt8"></div>
+    </div>
+  </div>
+
+  <!-- AI Consultation History Modal -->
+  <div id="ai-history-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>My AI Consultations</h3>
+        <button id="ai-history-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="ai-consultations-list" class="list mt8"></div>
+    </div>
+  </div>
+
+  <!-- Medicine Orders -->
+  <section id="medicineorder-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>📦 Order Medicines</h2>
+      <p class="hint mt8">Browse and order medicines from nearby pharmacies with live tracking.</p>
+
+      <div class="search-bar glass neon mt12">
+        <input id="order-pharmacy-search" class="search-xl" type="text" placeholder="Search pharmacy..." autocomplete="off"/>
       </div>
 
-      <div class="table-wrap mt12">
-        <table class="table">
-          <thead><tr><th>Medicine</th><th>Qty</th><th>₹/tablet</th><th></th></tr></thead>
-          <tbody id="inv-body"></tbody>
-        </table>
+      <div class="row wrap gap8 mt12">
+        <small class="hint">Showing 5 closest pharmacies.</small>
+        <button id="order-refresh-gps" class="btn outline sm ml-auto">Refresh Location</button>
+      </div>
+    </div>
+    <div id="order-pharmacies-list" class="cards mt12"></div>
+  </section>
+
+  <!-- Medicine Selection Modal -->
+  <div id="medicine-selection-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>Available Medicines</h3>
+        <button id="medicine-modal-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="medicine-list" class="list mt8"></div>
+      <div class="row gap8 mt12">
+        <button id="cart-view-btn" class="btn">View Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shopping Cart Modal -->
+  <div id="cart-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <h3>Shopping Cart</h3>
+      <div id="cart-items" class="list mt8"></div>
+      <div class="divider mt12"></div>
+      <div class="form mt12">
+        <label>Delivery Address</label>
+        <textarea id="delivery-address" placeholder="Enter delivery address..." rows="3"></textarea>
+        <label>Delivery Type</label>
+        <select id="delivery-type">
+          <option value="delivery">Home Delivery</option>
+          <option value="pickup">Pickup</option>
+        </select>
+        <label>Notes (optional)</label>
+        <textarea id="order-notes" placeholder="Any special instructions..." rows="2"></textarea>
+        <div class="row gap8 mt8">
+          <button id="place-order-btn" class="btn">Place Order</button>
+          <button id="cart-cancel-btn" class="btn outline">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order History Modal -->
+  <div id="order-history-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3>Order History</h3>
+        <button id="order-history-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="orders-list" class="list mt8"></div>
+    </div>
+  </div>
+
+  <!-- Medicines Search & Compare -->
+  <section id="medicines-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>💊 Search & Compare Medicines</h2>
+      <p class="hint mt8">Find medicines by name and compare prices across nearest medical shops.</p>
+
+      <div class="search-bar glass neon mt12">
+        <input id="medicine-search-input" class="search-xl" type="text" placeholder="Search medicine (e.g., Paracetamol, Aspirin)..." autocomplete="off"/>
+        <div class="tool-group">
+          <button id="medicine-search-btn" class="tool-btn" title="Search">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M11 19c4.4 0 8-3.6 8-8s-3.6-8-8-8-8 3.6-8 8 3.6 8 8 8m0-18c5.5 0 10 4.5 10 10s-4.5 10-10 10S1 16.5 1 11 5.5 1 11 1m8.3 20.3l-5.3-5.3" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="row wrap gap8 mt12">
+        <small class="hint">Compare prices from top 5 nearest medical shops.</small>
+        <button id="medicine-refresh-gps" class="btn outline sm ml-auto">Refresh Location</button>
+      </div>
+    </div>
+    <div id="medicine-search-results" class="cards mt12"></div>
+  </section>
+
+  <!-- Medicine Details Modal -->
+  <div id="medicine-details-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card card glass">
+      <div class="row space-between">
+        <h3 id="medicine-detail-name">Medicine Name</h3>
+        <button id="medicine-details-close" class="btn outline sm">Close</button>
+      </div>
+      <div id="medicine-detail-info" class="form mt12"></div>
+    </div>
+  </div>
+
+  <!-- Hospitals View (Updated - Top 5 only shown here) -->
+  <section id="hospitals-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>🏥 Nearby Hospitals (Top 5)</h2>
+      <p class="hint mt8">Showing hospitals closest to your location with available specialties.</p>
+
+      <div class="search-bar glass neon mt12">
+        <input id="hospital-search-input" class="search-xl" type="text" placeholder="Search hospital by name or specialty..." autocomplete="off"/>
+      </div>
+
+      <div class="row wrap gap8 mt12">
+        <small class="hint">Displaying 5 closest hospitals.</small>
+        <div class="row wrap gap8 ml-auto">
+          <button id="hospitals-refresh-gps" class="btn outline sm">Refresh Location</button>
+          <button id="hospitals-view-bookings" class="btn outline sm">📅 My Bookings</button>
+        </div>
+      </div>
+    </div>
+    <div id="hospitals-list" class="cards mt12"></div>
+  </section>
+
+  <!-- Live Tracking Dashboard -->
+  <section id="tracking-view" class="view hidden">
+    <div class="card lg glass">
+      <h2>📍 Live Tracking</h2>
+      <p class="hint mt8">Track all your active medicine orders and ambulance requests.</p>
+      <div class="row wrap gap8 mt12">
+        <small class="hint" id="tracking-status">No active tracking</small>
+        <button id="refresh-tracking" class="btn outline sm ml-auto">Refresh</button>
+      </div>
+    </div>
+
+    <div class="content-split mt12">
+      <div class="left-pane">
+        <section class="card glass">
+          <h3>Active Tracks</h3>
+          <div id="active-tracks-list" class="list mt8"></div>
+        </section>
+      </div>
+      <div class="right-pane">
+        <div id="tracking-map" class="glass" style="width:100%;height:520px;border-radius:16px;border:1px solid var(--edge);"></div>
       </div>
     </div>
   </section>
@@ -379,6 +703,8 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+  <script src="firebaseConfig.js"></script>
+  <script src="tracking.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
