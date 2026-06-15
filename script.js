@@ -50,14 +50,14 @@ const VIEWS = {
   profile: $('profile-view'),
   report: $('report-view'),
   settings: $('settings-view'),
-  medicines: $('medicines-view'),
   hospitals: $('hospitals-view'),
-  aiconsult: $('aiconsult-view'),
-  medicineorder: $('medicineorder-view'),
-  tracking: $('tracking-view'),
+  orders: $('orders-view'),
   pharmacyLogin: $('pharmacy-login-view'),
   pharmacyRegister: $('pharmacy-register-view'),
   pharmacyDash: $('pharmacy-dashboard-view'),
+  hospitalLogin: $('hospital-login-view'),
+  hospitalRegister: $('hospital-register-view'),
+  hospitalDash: $('hospital-dashboard-view'),
 };
 const sideNav = $('side-nav');
 
@@ -78,8 +78,10 @@ function showView(name){
 on($('brand-home'),'click',()=>{ getCurrentUser()? (showView('home'), ensureMap()) : showView('landing'); });
 on($('go-locator'),'click',()=>showView('login'));
 on($('go-pharmacy'),'click',()=>showView('pharmacyLogin'));
+on($('go-hospital'),'click',()=>showView('hospitalLogin'));
 on($('back-to-landing-1'),'click',()=>showView('landing'));
 on($('back-to-landing-2'),'click',()=>showView('landing'));
+on($('back-to-landing-3'),'click',()=>showView('landing'));
 
 document.querySelectorAll('.side-btn').forEach(btn=>{
   on(btn,'click',()=>{
@@ -88,10 +90,7 @@ document.querySelectorAll('.side-btn').forEach(btn=>{
     if (tab==='settings') showView('settings');
     else if (tab==='profile') showView('profile');
     else if (tab==='report') showView('report');
-    else if (tab==='medicines'){ showView('medicines'); initMedicineSearch(); }
-    else if (tab==='aiconsult'){ showView('aiconsult'); renderNearestAIHospitals(); }
-    else if (tab==='medicineorder'){ showView('medicineorder'); renderNearestPharmacies(); }
-    else if (tab==='tracking'){ showView('tracking'); initTrackingDashboard(); }
+    else if (tab==='orders'){ showView('orders'); renderOrdersList(); }
     else if (tab==='hospitals'){ showView('hospitals'); renderNearestHospitals(); }
     else showView('home');
   });
@@ -595,12 +594,16 @@ function renderNearestHospitals(){
         <span class="badge eta">ETA ${h._eta}</span>
         <span class="badge">📞 ${h.contact}</span>
       </div>
-      <div class="row mt8">
+      <div class="row mt8 gap8 wrap">
         <button class="btn sm" data-view-doctors="${h.id}">👨‍⚕️ View Doctors</button>
+        <button class="btn sm outline" data-route-hospital="${h.id}">🗺️ Route</button>
+        <button class="btn sm outline" data-book-doctor="${h.id}">📅 Book Doctor</button>
       </div>
     `;
     box.appendChild(card);
     card.querySelector(`[data-view-doctors]`).addEventListener('click', () => showDoctorModal(h.id, h.name));
+    card.querySelector(`[data-route-hospital]`).addEventListener('click', () => routeToHospital(h.id, h.lat, h.lon, h.name));
+    card.querySelector(`[data-book-doctor]`).addEventListener('click', () => showDoctorBookingModal(h.id, h.name));
   });
 }
 
@@ -631,12 +634,16 @@ function filterHospitals(){
         <span class="badge eta">ETA ${h._eta}</span>
         <span class="badge">📞 ${h.contact}</span>
       </div>
-      <div class="row mt8">
+      <div class="row mt8 gap8 wrap">
         <button class="btn sm" data-view-doctors="${h.id}">👨‍⚕️ View Doctors</button>
+        <button class="btn sm outline" data-route-hospital="${h.id}">🗺️ Route</button>
+        <button class="btn sm outline" data-book-doctor="${h.id}">📅 Book Doctor</button>
       </div>
     `;
     box.appendChild(card);
     card.querySelector(`[data-view-doctors]`).addEventListener('click', () => showDoctorModal(h.id, h.name));
+    card.querySelector(`[data-route-hospital]`).addEventListener('click', () => routeToHospital(h.id, h.lat, h.lon, h.name));
+    card.querySelector(`[data-book-doctor]`).addEventListener('click', () => showDoctorBookingModal(h.id, h.name));
   });
 }
 
@@ -1263,7 +1270,7 @@ function filterList(){
 
 // Hospital demo data seeding
 (function seedHospitalData(){
-  const SEED_FLAG = 'medifind_hospital_seed_v1';
+  const SEED_FLAG = 'medifind_hospital_seed_v2';
   if (localStorage.getItem(SEED_FLAG)) return;
 
   const base = { lat: 12.9065, lon: 77.4845 };
@@ -1388,6 +1395,99 @@ function filterList(){
         { id: 'd25', name: 'Dr. Ananya Reddy', specialty: 'Pediatrics', qualification: 'MD, DCH', available: true, fee: 320 },
         { id: 'd26', name: 'Dr. Vikram Patel', specialty: 'Neurology', qualification: 'MD, DM', available: false, fee: 400 }
       ]
+    },
+    {
+      id: 'kengeri_general_hospital',
+      name: 'Kengeri General Hospital',
+      contact: '9876543220',
+      address: 'Near Kengeri Bus Stop, Bangalore',
+      lat: 12.9120, lon: 77.4870,
+      hours24: true, open: '00:00', close: '23:59',
+      specialties: ['General Medicine', 'Emergency', 'Pediatrics', 'Gynecology'],
+      doctors: [
+        { id: 'd27', name: 'Dr. Rajesh Nair', specialty: 'General Medicine', qualification: 'MD', available: true, fee: 300 },
+        { id: 'd28', name: 'Dr. Deepika Sharma', specialty: 'Gynecology', qualification: 'MD, DGO', available: true, fee: 350 },
+        { id: 'd29', name: 'Dr. Arun Kumar', specialty: 'Pediatrics', qualification: 'MD, DCH', available: true, fee: 280 }
+      ]
+    },
+    {
+      id: 'lakeside_multispec',
+      name: 'Lakeside Multispecialty Hospital',
+      contact: '9876543221',
+      address: 'Lakeside Layout, Kengeri, Bangalore',
+      lat: 12.8950, lon: 77.4750,
+      hours24: false, open: '08:00', close: '20:00',
+      specialties: ['Cardiology', 'Orthopedics', 'General Surgery', 'Neurology'],
+      doctors: [
+        { id: 'd30', name: 'Dr. Vikram Singh', specialty: 'Cardiology', qualification: 'MD, DM', available: true, fee: 600 },
+        { id: 'd31', name: 'Dr. Meera Patel', specialty: 'Orthopedics', qualification: 'MS, MCh', available: true, fee: 500 },
+        { id: 'd32', name: 'Dr. Arjun Das', specialty: 'General Surgery', qualification: 'MS', available: false, fee: 400 }
+      ]
+    },
+    {
+      id: 'sjbit_medical_center',
+      name: 'SJBIT Medical & Wellness Center',
+      contact: '9876543222',
+      address: 'Inside SJBIT Campus, Kengeri',
+      lat: 12.9065, lon: 77.4845,
+      hours24: false, open: '08:00', close: '18:00',
+      specialties: ['General Medicine', 'Occupational Health', 'Emergency'],
+      doctors: [
+        { id: 'd33', name: 'Dr. Anandkumar Reddy', specialty: 'General Medicine', qualification: 'MD', available: true, fee: 250 },
+        { id: 'd34', name: 'Dr. Sneha Kulkarni', specialty: 'General Medicine', qualification: 'MD', available: true, fee: 250 }
+      ]
+    },
+    {
+      id: 'kengeri_cardiac_center',
+      name: 'Kengeri Cardiac Care Center',
+      contact: '9876543223',
+      address: 'Kengeri Satellite Town, Bangalore',
+      lat: 12.9150, lon: 77.4800,
+      hours24: true, open: '00:00', close: '23:59',
+      specialties: ['Cardiology', 'Pulmonology', 'Emergency'],
+      doctors: [
+        { id: 'd35', name: 'Dr. Sanjay Kumar', specialty: 'Cardiology', qualification: 'MD, DM', available: true, fee: 700 },
+        { id: 'd36', name: 'Dr. Rajini Prakash', specialty: 'Pulmonology', qualification: 'MD, DM', available: true, fee: 550 }
+      ]
+    },
+    {
+      id: 'kengeri_orthopedic',
+      name: 'Kengeri Orthopedic & Trauma Hospital',
+      contact: '9876543224',
+      address: 'Near SJBIT, Kengeri, Bangalore',
+      lat: 12.9080, lon: 77.4860,
+      hours24: true, open: '00:00', close: '23:59',
+      specialties: ['Orthopedics', 'Trauma Surgery', 'General Medicine'],
+      doctors: [
+        { id: 'd37', name: 'Dr. Mohan Reddy', specialty: 'Orthopedics', qualification: 'MS, MCh', available: true, fee: 550 },
+        { id: 'd38', name: 'Dr. Priya Nair', specialty: 'Trauma Surgery', qualification: 'MS', available: true, fee: 600 }
+      ]
+    },
+    {
+      id: 'kengeri_maternity',
+      name: 'Kengeri Maternity & Child Care Hospital',
+      contact: '9876543225',
+      address: 'Kengeri Main Road, Bangalore',
+      lat: 12.9000, lon: 77.4900,
+      hours24: true, open: '00:00', close: '23:59',
+      specialties: ['Gynecology', 'Obstetrics', 'Pediatrics', 'Neonatology'],
+      doctors: [
+        { id: 'd39', name: 'Dr. Anjali Misra', specialty: 'Gynecology', qualification: 'MD, DGO', available: true, fee: 400 },
+        { id: 'd40', name: 'Dr. Kavita Sharma', specialty: 'Pediatrics', qualification: 'MD, DCH', available: true, fee: 350 }
+      ]
+    },
+    {
+      id: 'kengeri_wellness_clinic',
+      name: 'Kengeri Wellness & Diagnostic Center',
+      contact: '9876543226',
+      address: 'Kengeri, Near Railway Station, Bangalore',
+      lat: 12.8980, lon: 77.4920,
+      hours24: false, open: '07:00', close: '21:00',
+      specialties: ['General Medicine', 'Pathology', 'Radiology', 'Dentistry'],
+      doctors: [
+        { id: 'd41', name: 'Dr. Ramesh Kumar', specialty: 'General Medicine', qualification: 'MD', available: true, fee: 280 },
+        { id: 'd42', name: 'Dr. Seema Gupta', specialty: 'General Medicine', qualification: 'MD', available: true, fee: 280 }
+      ]
     }
   ];
 
@@ -1396,7 +1496,7 @@ function filterList(){
   });
   localStorage.setItem('medifind_hospitals_list', JSON.stringify(hospitals.map(h => h.id)));
   localStorage.setItem(SEED_FLAG, '1');
-  console.log('✅ Hospital demo data seeded. 8 hospitals with doctors.');
+  console.log('✅ Hospital demo data seeded. 15 hospitals with doctors (8 near Kengeri/SJBIT).');
 })();
 
 // ===== Hospital Event Handlers =====
@@ -1418,270 +1518,259 @@ on($('bookings-history-close'), 'click', () => {
   $('bookings-history-modal').classList.add('hidden');
 });
 
+// Hospital search
+on($('hospital-search-input'), 'input', () => {
+  filterHospitals();
+});
+
 // Bind sort
 on($('sort-select'),'change', ()=> filterList());
 
-// ===== AI DOCTOR CONSULTATION =====
-function getAIConsultations(){
-  const user = getCurrentUser(); if(!user) return [];
-  return firebaseDB.aiConsultations.getAll(user);
-}
+// ===== AI CHATBOX & MEDICINE ORDERING =====
 
-function saveAIConsultation(data){
-  const user = getCurrentUser(); if(!user) return false;
-  return firebaseDB.aiConsultations.add(user, data);
-}
+// Symptom to Medicine mapping
+const symptomMedicineMap = {
+  'fever': ['Paracetamol 650mg', 'Ibuprofen 400mg', 'Aspirin'],
+  'cough': ['Dextromethorphan', 'Ambroxol', 'Cough syrup'],
+  'cold': ['Cetirizine 10mg', 'Levocetirizine 5mg', 'Vitamin C'],
+  'headache': ['Paracetamol 650mg', 'Ibuprofen 400mg', 'Aspirin'],
+  'allergy': ['Cetirizine 10mg', 'Levocetirizine 5mg'],
+  'acidity': ['Pantoprazole 40mg', 'Omeprazole 20mg', 'Antacid Gel'],
+  'body pain': ['Diclofenac 50mg', 'Ibuprofen 400mg', 'Paracetamol 650mg'],
+  'diabetes': ['Metformin 500mg', 'Glimepiride 1mg'],
+  'nausea': ['Ondansetron 4mg', 'Domperidone 10mg'],
+  'diarrhea': ['ORS Sachet', 'Loperamide'],
+};
 
-function findNearestAIHospitals(userLat, userLon, count=5){
-  if(!userLat || !userLon) userLat=12.9065; userLon=77.4845;
-  const hospitals = getHospitals();
-  let list = Object.values(hospitals).map(h => {
-    const d = km([userLat, userLon], [h.lat, h.lon]);
-    const hoursStatus = isOpenNow({hours24: h.hours24, open: h.open, close: h.close});
-    return {...h, _dist: d, _eta: eta(d), _open: hoursStatus.open, _openLabel: hoursStatus.label};
-  });
-  list.sort((a,b) => a._dist - b._dist);
-  return list.slice(0, count);
-}
+// Symptom to Specialist mapping
+const symptomSpecialistMap = {
+  'fever': ['General Medicine', 'Pediatrics'],
+  'cough': ['Pulmonology', 'General Medicine'],
+  'cold': ['General Medicine', 'Pediatrics'],
+  'headache': ['Neurology', 'General Medicine'],
+  'allergy': ['Dermatology', 'General Medicine'],
+  'acidity': ['Gastroenterology', 'General Medicine'],
+  'body pain': ['Orthopedics', 'General Medicine'],
+  'diabetes': ['Endocrinology', 'General Medicine'],
+  'heart': ['Cardiology'],
+  'chest pain': ['Cardiology', 'General Medicine'],
+};
 
-function renderNearestAIHospitals(){
-  if(!userCoords) userCoords = [12.9065, 77.4845];
-  const hospitals = findNearestAIHospitals(userCoords[0], userCoords[1], 5);
-  const box = $('ai-hospitals-list'); if(!box) return;
-  box.innerHTML = '';
+let chatHistory = [];
 
-  if(!hospitals.length){
-    box.innerHTML = '<div class="card glass"><strong>No hospitals found nearby.</strong></div>';
-    return;
-  }
-
-  hospitals.forEach((h, idx) => {
-    const card = document.createElement('div'); card.className = 'card glass';
-    const specsHtml = h.specialties.map(s => `<span class="badge specialty">${s}</span>`).join('');
-    card.innerHTML = `
-      <div class="row space-between">
-        <strong>#${idx+1} ${h.name}</strong>
-        <span class="badge ${h._open ? 'open' : 'closed'}">${h._openLabel}</span>
-      </div>
-      <div class="addr">${h.address}</div>
-      <div class="row mt8 gap8">${specsHtml}</div>
-      <div class="row mt8 gap8">
-        <span class="badge km">${h._dist.toFixed(2)} km</span>
-        <span class="badge eta">ETA ${h._eta}</span>
-      </div>
-      <div class="row mt8">
-        <button class="btn sm" data-ai-view-doctors="${h.id}">🤖 View AI Doctors</button>
-      </div>
-    `;
-    box.appendChild(card);
-    card.querySelector(`[data-ai-view-doctors]`).addEventListener('click', () => showAIDoctorModal(h.id, h.name));
-  });
-}
-
-function showAIDoctorModal(hospitalId, hospitalName){
-  const hospital = storageJSON(`medifind_hospital_${hospitalId}`);
-  if(!hospital) return;
-
-  const modal = $('ai-doctor-modal'); if(!modal) return;
-  const docList = $('ai-doctor-list'); if(!docList) return;
-  docList.innerHTML = '';
-
-  const specSet = new Set(hospital.doctors.map(d => d.specialty));
-  specSet.forEach(spec => {
-    const specDiv = document.createElement('div');
-    specDiv.className = 'specialty-group';
-    specDiv.innerHTML = `<h4>🤖 ${spec}</h4>`;
-
-    hospital.doctors.filter(d => d.specialty === spec).forEach(doc => {
-      const docCard = document.createElement('div'); docCard.className = 'doctor-card';
-      docCard.innerHTML = `
-        <div class="row space-between">
-          <strong>${doc.name}</strong>
-          <span class="badge ${doc.available ? 'open' : 'closed'}">${doc.available ? 'Available' : 'Unavailable'}</span>
-        </div>
-        <small class="hint">${doc.qualification}</small>
-        <div class="row mt8 space-between">
-          <span>💰 ₹${doc.fee} | 🤖 AI-Assisted</span>
-          <button class="btn sm" data-ai-book-doctor="${doc.id}" ${!doc.available ? 'disabled' : ''}>Book</button>
-        </div>
-      `;
-      specDiv.appendChild(docCard);
-
-      if(doc.available){
-        docCard.querySelector(`[data-ai-book-doctor]`).addEventListener('click', () => {
-          window.selectedAIDoctor = {hospitalId, hospitalName, ...doc};
-          $('ai-symptom-modal').classList.remove('hidden');
-        });
-      }
-    });
-    docList.appendChild(specDiv);
+// AI Chatbox Functions
+function initAIChatbox(){
+  on($('ai-chat-toggle'), 'click', () => {
+    $('ai-chat-modal').classList.remove('hidden');
+    setTimeout(() => $('ai-chat-input').focus(), 100);
   });
 
-  modal.classList.remove('hidden');
-}
-
-let selectedAISummary = '';
-on($('ai-analyze-btn'),'click',()=>{
-  const symptoms = ($('ai-symptoms').value||'').trim();
-  const duration = ($('ai-duration').value||'').trim();
-  const severity = $('ai-severity').value;
-  if(!symptoms) return toast('Please describe your symptoms');
-
-  // Mock AI analysis
-  const summary = `AI Analysis: Based on reported ${severity} symptoms of ${symptoms} lasting ${duration}, possible conditions include common viral infections or minor ailments. Please consult with the doctor for proper diagnosis and treatment.`;
-  selectedAISummary = summary;
-
-  $('ai-symptom-modal').classList.add('hidden');
-  showAIBookingModal();
-});
-
-function showAIBookingModal(){
-  const doctor = window.selectedAIDoctor;
-  if(!doctor) return;
-
-  const modal = $('ai-consultation-modal'); if(!modal) return;
-  const form = $('ai-booking-form'); if(!form) return;
-
-  const today = new Date().toISOString().split('T')[0];
-  form.innerHTML = `
-    <label><strong>Doctor:</strong> ${doctor.name}</label>
-    <label><strong>Specialty:</strong> ${doctor.specialty}</label>
-    <label><strong>Hospital:</strong> ${window.selectedAIDoctor.hospitalName}</label>
-    <label><strong>Fee:</strong> ₹${doctor.fee}</label>
-    <label><strong>AI Analysis:</strong></label>
-    <div class="card" style="background:var(--card);padding:10px;border-radius:10px;"><small>${selectedAISummary}</small></div>
-    <label>Consultation Date</label>
-    <input type="date" id="ai-consult-date" min="${today}" required>
-    <label>Consultation Time</label>
-    <input type="time" id="ai-consult-time" value="10:00" required>
-    <label>Type</label>
-    <select id="ai-consult-type">
-      <option value="online">Online</option>
-      <option value="in-person">In-person</option>
-    </select>
-    <div class="row gap8 mt12">
-      <button id="confirm-ai-booking" class="btn">Confirm Booking</button>
-      <button id="cancel-ai-booking" class="btn outline">Cancel</button>
-    </div>
-  `;
-
-  on($('confirm-ai-booking'),'click',()=>{
-    const date = $('ai-consult-date').value;
-    const time = $('ai-consult-time').value;
-    const type = $('ai-consult-type').value;
-    if(!date || !time) return toast('Select date and time');
-
-    const consultation = {
-      hospitalId: doctor.hospitalId,
-      hospitalName: window.selectedAIDoctor.hospitalName,
-      doctorId: doctor.id,
-      doctorName: doctor.name,
-      specialty: doctor.specialty,
-      aiAssisted: true,
-      userSymptoms: $('ai-symptoms').value,
-      consultationType: type,
-      bookedDate: date,
-      bookedTime: time,
-      aiSummary: selectedAISummary
-    };
-
-    saveAIConsultation(consultation);
-    modal.classList.add('hidden');
-    $('ai-doctor-modal').classList.add('hidden');
-    $('ai-symptom-modal').classList.add('hidden');
-    toast('✅ AI Consultation booked! Check your profile.');
+  on($('ai-chat-close'), 'click', () => {
+    $('ai-chat-modal').classList.add('hidden');
   });
 
-  on($('cancel-ai-booking'),'click',()=>{ modal.classList.add('hidden'); });
-
-  modal.classList.remove('hidden');
-}
-
-function renderAIConsultationHistory(){
-  const consultations = getAIConsultations();
-  const box = $('ai-consultations-list'); if(!box) return;
-  box.innerHTML = '';
-
-  if(!consultations.length){
-    box.innerHTML = '<div class="card glass"><small class="hint">No AI consultations yet</small></div>';
-    return;
-  }
-
-  consultations.forEach(c => {
-    const card = document.createElement('div'); card.className = 'card glass mt8';
-    const statusColor = c.status === 'confirmed' ? 'open' : c.status === 'completed' ? 'ok' : 'closed';
-    card.innerHTML = `
-      <div class="row space-between">
-        <div>
-          <strong>🤖 ${c.doctorName}</strong> - <small>${c.specialty}</small>
-          <div class="hint">${c.hospitalName}</div>
-        </div>
-        <span class="badge ${statusColor}">${c.status}</span>
-      </div>
-      <div class="row mt8">
-        <span>📅 ${c.bookedDate} at ${c.bookedTime}</span>
-        <span>${c.consultationType === 'online' ? '💻 Online' : '🏥 In-person'}</span>
-      </div>
-      <div class="hint mt8"><small>AI Analysis: ${c.aiSummary}</small></div>
-    `;
-    box.appendChild(card);
+  on($('ai-chat-send'), 'click', () => {
+    const input = $('ai-chat-input');
+    if(input.value.trim()) analyzeSymptomsAI(input.value);
+    input.value = '';
   });
-}
 
-on($('ai-refresh-gps'),'click',()=>{ requestGPS(); setTimeout(() => { renderNearestAIHospitals(); toast('Location refreshed'); }, 500); });
-on($('ai-doctor-modal-close'),'click',()=>{ $('ai-doctor-modal').classList.add('hidden'); });
-on($('ai-symptom-modal-close'),'click',()=>{ $('ai-symptom-modal').classList.add('hidden'); });
-on($('ai-history-close'),'click',()=>{ $('ai-history-modal').classList.add('hidden'); });
+  on($('ai-chat-input'), 'keydown', (e) => {
+    if(e.key === 'Enter' && e.ctrlKey === false) {
+      e.preventDefault();
+      $('ai-chat-send').click();
+    }
+  });
 
-// ===== MEDICINE ORDERS =====
-let currentCart = [];
-
-function getOrders(){
-  const user = getCurrentUser(); if(!user) return [];
-  return firebaseDB.orders.getAll(user);
-}
-
-function saveOrder(data){
-  const user = getCurrentUser(); if(!user) return false;
-  return firebaseDB.orders.add(user, data);
-}
-
-function renderNearestPharmacies(){
-  if(!userCoords) userCoords = [12.9065, 77.4845];
-  const pharmacies = findNearestPharmacies(userCoords[0], userCoords[1], 5);
-  const box = $('order-pharmacies-list'); if(!box) return;
-  box.innerHTML = '';
-
-  if(!pharmacies.length){
-    box.innerHTML = '<div class="card glass"><strong>No pharmacies found nearby.</strong></div>';
-    return;
-  }
-
-  pharmacies.forEach((p, idx) => {
-    const card = document.createElement('div'); card.className = 'card glass';
-    card.innerHTML = `
-      <div class="row space-between">
-        <strong>#${idx+1} ${p.store}</strong>
-        <span class="badge ${p._open ? 'open' : 'closed'}">${p._openLabel}</span>
-      </div>
-      <div class="addr">${p.address||''}</div>
-      <div class="row mt8 gap8">
-        <span class="badge km">${p._dist.toFixed(2)} km</span>
-        <span class="badge eta">ETA ${p._eta}</span>
-      </div>
-      <div class="row mt8">
-        <button class="btn sm" data-browse-medicines="${idx}">📦 Browse Medicines</button>
-      </div>
-    `;
-    box.appendChild(card);
-    card.querySelector(`[data-browse-medicines]`).addEventListener('click', () => {
-      window.selectedPharmacy = {...p, index: idx};
-      showMedicineSelectionModal(p);
+  // Symptom quick buttons
+  document.querySelectorAll('[data-symptom]').forEach(btn => {
+    on(btn, 'click', () => {
+      const symptom = btn.dataset.symptom;
+      $('ai-chat-input').value = symptom;
+      $('ai-chat-send').click();
     });
   });
 }
 
-function findNearestPharmacies(userLat, userLon, count=5){
+function addChatMessage(role, content) {
+  const box = $('ai-chat-messages');
+  const msg = document.createElement('div');
+  msg.style.marginBottom = '12px';
+  msg.style.display = 'flex';
+  msg.style.justifyContent = role === 'user' ? 'flex-end' : 'flex-start';
+
+  const bubble = document.createElement('div');
+  bubble.style.maxWidth = '80%';
+  bubble.style.padding = '10px 14px';
+  bubble.style.borderRadius = '10px';
+  bubble.style.wordWrap = 'break-word';
+
+  if(role === 'user') {
+    bubble.style.background = 'var(--pri)';
+    bubble.style.color = '#fff';
+  } else {
+    bubble.style.background = 'var(--card)';
+    bubble.style.border = '1px solid var(--edge)';
+  }
+
+  bubble.innerHTML = content;
+  msg.appendChild(bubble);
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+}
+
+function analyzeSymptomsAI(userInput) {
+  const input = userInput.toLowerCase();
+
+  // Add user message
+  addChatMessage('user', userInput);
+
+  // Find matching medicines and specialists
+  let suggestedMedicines = [];
+  let suggestedSpecialists = [];
+
+  for(let symptom in symptomMedicineMap) {
+    if(input.includes(symptom)) {
+      suggestedMedicines = [...new Set([...suggestedMedicines, ...symptomMedicineMap[symptom]])];
+      suggestedSpecialists = [...new Set([...suggestedSpecialists, ...(symptomSpecialistMap[symptom] || [])])];
+    }
+  }
+
+  if(!suggestedMedicines.length) {
+    addChatMessage('ai', '😊 I understand you\'re experiencing symptoms. Could you describe them more clearly? Try: fever, cough, cold, headache, allergy, acidity, body pain, etc.');
+    return;
+  }
+
+  // Find pharmacies with suggested medicines
+  const stores = getStores();
+  const pharmaciesWithMedicines = [];
+
+  for(const storeUser in stores) {
+    const prof = stores[storeUser]?.profile || {};
+    if(!prof.publish || !prof.lat || !prof.lon) continue;
+
+    const storeInvKey = `medifind_store_${storeUser}`;
+    const inventory = storageJSON(storeInvKey) || [];
+
+    const availableMedicines = inventory.filter(med =>
+      suggestedMedicines.some(suggested => med.name.toLowerCase().includes(suggested.toLowerCase()))
+    );
+
+    if(availableMedicines.length > 0) {
+      const dist = km([userCoords[0] || 12.9065, userCoords[1] || 77.4845], [prof.lat, prof.lon]);
+      pharmaciesWithMedicines.push({
+        name: prof.name,
+        distance: dist,
+        medicines: availableMedicines,
+        lat: prof.lat,
+        lon: prof.lon,
+      });
+    }
+  }
+
+  pharmaciesWithMedicines.sort((a,b) => a.distance - b.distance);
+  const topPharmacies = pharmaciesWithMedicines.slice(0, 3);
+
+  // Find hospitals with specialists
+  const hospitals = findNearestHospitals(userCoords[0] || 12.9065, userCoords[1] || 77.4845, 3);
+  const relevantHospitals = hospitals.filter(h =>
+    suggestedSpecialists.some(spec => h.specialties && h.specialties.some(s => s.toLowerCase().includes(spec.toLowerCase())))
+  );
+
+  // Build AI response
+  let response = `<strong>💊 Suggested Treatment Plan:</strong><br/>`;
+  response += `<div class="hint mt8">Based on your symptoms: <strong>${userInput}</strong></div>`;
+
+  response += `<div class="mt8"><strong>Recommended Medicines:</strong> ${suggestedMedicines.slice(0, 3).join(', ')}</div>`;
+
+  response += `<div class="mt8"><strong>📍 Nearby Pharmacies (${topPharmacies.length} found):</strong><br/>`;
+  topPharmacies.forEach((p, i) => {
+    response += `${i+1}. <strong>${p.name}</strong> (${p.distance.toFixed(1)} km)<br/>`;
+    response += `   Available: ${p.medicines.slice(0, 2).map(m => m.name).join(', ')}<br/>`;
+  });
+  response += `</div>`;
+
+  response += `<div class="mt8"><strong>🏥 Nearby Hospitals with ${suggestedSpecialists[0] || 'specialists'} (${relevantHospitals.length} found):</strong><br/>`;
+  relevantHospitals.slice(0, 2).forEach((h, i) => {
+    response += `${i+1}. <strong>${h.name}</strong> (${h._dist.toFixed(1)} km)<br/>`;
+  });
+  response += `</div>`;
+
+  response += `<div class="hint mt8" style="font-size:12px;">⚠️ This is not medical advice. Please consult with a healthcare professional.</div>`;
+
+  addChatMessage('ai', response);
+}
+
+// Medicine Ordering
+function renderQuickOrderMedicines() {
+  if(!userCoords) userCoords = [12.9065, 77.4845];
+
+  const nearestPharmacies = findNearestPharmacies(userCoords[0], userCoords[1], 3);
+  const box = $('quick-order-list');
+  if(!box) return;
+
+  box.innerHTML = '';
+
+  if(!nearestPharmacies.length) {
+    box.innerHTML = '<div class="card glass"><small class="hint">No pharmacies found nearby</small></div>';
+    return;
+  }
+
+  nearestPharmacies.forEach(pharm => {
+    const storeInvKey = `medifind_store_${pharm.store}`;
+    const inventory = storageJSON(storeInvKey) || [];
+
+    if(!inventory.length) return;
+
+    const topMedicines = inventory.slice(0, 3);
+
+    const card = document.createElement('div');
+    card.className = 'card glass';
+    card.innerHTML = `
+      <div class="row space-between">
+        <strong>${pharm.store}</strong>
+        <span class="badge km">${pharm._dist.toFixed(1)} km</span>
+      </div>
+      <div class="hint mt8">Available: ${topMedicines.map(m => m.name).join(', ')}</div>
+      <div class="row gap8 mt8">
+        <button class="btn sm" data-order-pharmacy="${pharm.store}">📦 Order Now</button>
+        <button class="btn outline sm" data-view-pharmacy="${pharm.store}">View All</button>
+      </div>
+    `;
+    box.appendChild(card);
+
+    card.querySelector(`[data-order-pharmacy]`).addEventListener('click', () => {
+      window.selectedPharmacyForOrder = pharm;
+      showOrderModal(pharm);
+    });
+  });
+}
+
+function showOrderModal(pharmacy) {
+  const storeInvKey = `medifind_store_${pharmacy.store}`;
+  const inventory = storageJSON(storeInvKey) || [];
+
+  let total = 0;
+  let items = [];
+
+  inventory.forEach(med => {
+    items.push(med.name);
+    total += Number(med.price) || 0;
+  });
+
+  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+
+  $('order-id-display').textContent = orderId;
+  $('order-pharmacy-display').textContent = pharmacy.store;
+  $('order-items-display').textContent = items.slice(0, 3).join(', ') + (items.length > 3 ? '...' : '');
+  $('order-total-display').textContent = (total * Math.min(3, items.length)).toFixed(2);
+  $('order-eta-display').textContent = '30-45 min';
+
+  $('order-confirm-modal').classList.remove('hidden');
+  toast('✅ Your order is placed! Tracking your delivery...', 3000);
+}
+
+function findNearestPharmacies(userLat, userLon, count=5) {
   if(!userLat || !userLon) userLat=12.9065; userLon=77.4845;
   let rows = pharmacies.map(p=>{
     const d=km([userLat,userLon],[p.lat,p.lon]);
@@ -1693,368 +1782,134 @@ function findNearestPharmacies(userLat, userLon, count=5){
   return rows.slice(0, count);
 }
 
-function showMedicineSelectionModal(pharmacy){
-  const modal = $('medicine-selection-modal'); if(!modal) return;
-  const medList = $('medicine-list'); if(!medList) return;
-  medList.innerHTML = '';
-
-  const storeInvKey = `medifind_store_${pharmacy.store}`;
-  const inventory = storageJSON(storeInvKey) || [];
-
-  if(!inventory.length){
-    medList.innerHTML = '<div class="card glass"><small class="hint">No medicines available</small></div>';
-  } else {
-    inventory.forEach((med, idx) => {
-      const row = document.createElement('div'); row.className = 'row space-between list-row';
-      row.innerHTML = `
-        <div>
-          <strong>${med.name}</strong>
-          <div class="hint">₹${Number(med.price).toFixed(2)} | Qty: ${med.qty}</div>
-        </div>
-        <button class="btn sm" data-add-to-cart="${idx}">Add</button>
-      `;
-      medList.appendChild(row);
-      row.querySelector(`[data-add-to-cart]`).addEventListener('click',()=>{
-        currentCart.push({...med, index: idx, pharmacyName: pharmacy.store, pharmacyId: pharmacy.store});
-        toast(`${med.name} added to cart`);
-      });
-    });
-  }
-
-  modal.classList.remove('hidden');
-}
-
-function renderCart(){
-  const box = $('cart-items'); if(!box) return;
-  box.innerHTML = '';
-
-  if(!currentCart.length){
-    box.innerHTML = '<div class="card glass"><small class="hint">Cart is empty</small></div>';
-    return;
-  }
-
-  let totalPrice = 0;
-  currentCart.forEach((item, idx) => {
-    totalPrice += Number(item.price) || 0;
-    const row = document.createElement('div'); row.className = 'row space-between list-row';
-    row.innerHTML = `
-      <div>
-        <strong>${item.name}</strong>
-        <div class="hint">₹${Number(item.price).toFixed(2)} × ${item.quantity || 1}</div>
-      </div>
-      <button class="btn outline sm" data-remove-from-cart="${idx}">Remove</button>
-    `;
-    box.appendChild(row);
-    row.querySelector(`[data-remove-from-cart]`).addEventListener('click',()=>{
-      currentCart.splice(idx, 1);
-      renderCart();
-    });
-  });
-
-  const totalRow = document.createElement('div'); totalRow.className = 'row space-between list-row' ;
-  totalRow.innerHTML = `<strong>Total: ₹${totalPrice.toFixed(2)}</strong>`;
-  box.appendChild(totalRow);
-}
-
-on($('cart-view-btn'),'click',()=>{
-  $('medicine-selection-modal').classList.add('hidden');
-  renderCart();
-  $('cart-modal').classList.remove('hidden');
-});
-
-on($('place-order-btn'),'click',()=>{
-  const address = ($('delivery-address').value||'').trim();
-  if(!currentCart.length) return toast('Cart is empty');
-  if(!address) return toast('Enter delivery address');
-
-  const order = {
-    pharmacyName: window.selectedPharmacy.store,
-    pharmacyId: window.selectedPharmacy.store,
-    medicines: currentCart,
-    totalPrice: currentCart.reduce((sum, m) => sum + (Number(m.price)||0), 0),
-    deliveryAddress: address,
-    deliveryType: $('delivery-type').value,
-    estimatedDelivery: '30-45 min',
-    status: 'placed',
-    userNotes: ($('order-notes').value||'').trim()
-  };
-
-  const savedOrder = saveOrder(order);
-  if(savedOrder){
-    // Start GPS tracking
-    gpsSimulator.startTracking(
-      savedOrder.id,
-      window.selectedPharmacy.lat,
-      window.selectedPharmacy.lon,
-      userCoords[0],
-      userCoords[1],
-      'delivery'
-    );
-    currentCart = [];
-    $('cart-modal').classList.add('hidden');
-    toast('✅ Order placed! Live tracking started.');
-  }
-});
-
-on($('cart-cancel-btn'),'click',()=>{ $('cart-modal').classList.add('hidden'); });
-on($('medicine-modal-close'),'click',()=>{ $('medicine-selection-modal').classList.add('hidden'); });
-
-function renderOrderHistory(){
-  const orders = getOrders();
-  const box = $('orders-list'); if(!box) return;
-  box.innerHTML = '';
-
-  if(!orders.length){
-    box.innerHTML = '<div class="card glass"><small class="hint">No orders yet</small></div>';
-    return;
-  }
-
-  orders.forEach(o => {
-    const card = document.createElement('div'); card.className = 'card glass mt8';
-    const statusColor = o.status === 'placed' ? 'muted' : o.status === 'in-transit' ? 'pri' : o.status === 'delivered' ? 'ok' : 'closed';
-    card.innerHTML = `
-      <div class="row space-between">
-        <div>
-          <strong>${o.pharmacyName}</strong>
-          <div class="hint">${o.medicines.length} medicine(s) | ₹${o.totalPrice.toFixed(2)}</div>
-        </div>
-        <span class="badge ${statusColor}">${o.status}</span>
-      </div>
-      <div class="hint mt8">${o.deliveryAddress}</div>
-      <div class="row mt8">
-        ${o.status === 'in-transit' ? `<button class="btn outline sm" data-track-order="${o.orderId}">Track</button>` : ''}
-      </div>
-    `;
-    box.appendChild(card);
-  });
-}
-
-on($('order-refresh-gps'),'click',()=>{ requestGPS(); setTimeout(()=>{ renderNearestPharmacies(); toast('Location refreshed'); }, 500); });
-on($('order-history-close'),'click',()=>{ $('order-history-modal').classList.add('hidden'); });
-
-// ===== MEDICINE SEARCH & COMPARE =====
-function initMedicineSearch(){
-  requestGPS();
-}
-
-function getMedicineUses(medicineName){
-  const medicineDatabase = {
-    'paracetamol': 'Fever, mild pain relief',
-    'aspirin': 'Fever, headache, anticoagulant',
-    'dolo': 'Pain and fever relief',
-    'cough syrup': 'Cough suppression',
-    'vitamin d3': 'Calcium absorption, bone health',
-    'metformin': 'Diabetes management',
-    'cetirizine': 'Allergy relief, antihistamine',
-    'pantoprazole': 'Acid reflux, GERD',
-    'azithromycin': 'Bacterial infection antibiotic',
-    'amoxicillin': 'Bacterial infection antibiotic',
-  };
-
-  const key = medicineName.toLowerCase();
-  for(let k in medicineDatabase){
-    if(key.includes(k) || k.includes(key)){
-      return medicineDatabase[k];
-    }
-  }
-  return 'General health supplement or medication. Consult doctor for detailed usage.';
-}
-
-function searchMedicinesAcrossShops(medicineName){
+// Hospital Routing
+function routeToHospital(hospitalId, hospitalLat, hospitalLon, hospitalName) {
   if(!userCoords) userCoords = [12.9065, 77.4845];
-  if(!medicineName.trim()) return [];
+  const origin = `${userCoords[0]},${userCoords[1]}`;
+  const destination = `${hospitalLat},${hospitalLon}`;
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  window.open(url, '_blank');
+  toast(`🗺️ Opening directions to ${hospitalName}...`);
+}
 
-  const searchQuery = medicineName.toLowerCase();
-  const results = [];
+// Doctor Booking
+let selectedHospitalForBooking = null;
 
-  const stores = getStores();
-  for(const storeUser in stores){
-    const prof = stores[storeUser]?.profile || {};
-    if(!prof.publish || !prof.lat || !prof.lon) continue;
+function showDoctorBookingModal(hospitalId, hospitalName) {
+  const hospital = storageJSON(`medifind_hospital_${hospitalId}`);
+  if(!hospital) return;
 
-    const storeInvKey = `medifind_store_${storeUser}`;
-    const inv = storageJSON(storeInvKey) || [];
+  selectedHospitalForBooking = { id: hospitalId, name: hospitalName, ...hospital };
 
-    inv.forEach(item => {
-      if(item.name.toLowerCase().includes(searchQuery)){
-        const distance = km([userCoords[0], userCoords[1]], [prof.lat, prof.lon]);
-        results.push({
-          medicineName: item.name,
-          price: Number(item.price) || 0,
-          qty: item.qty,
-          storeName: prof.name || storeUser,
-          storeContact: prof.contact || 'N/A',
-          distance: distance,
-          eta: eta(distance),
-          lat: prof.lat,
-          lon: prof.lon,
-          hours: { hours24: !!prof.hours24, open: prof.open, close: prof.close },
-          storeUser: storeUser
+  // Populate specialties
+  const specSelect = $('booking-specialty');
+  specSelect.innerHTML = '<option value="">Choose specialty...</option>';
+  const specialties = [...new Set(hospital.doctors.map(d => d.specialty))];
+  specialties.forEach(spec => {
+    const opt = document.createElement('option');
+    opt.value = spec;
+    opt.textContent = spec;
+    specSelect.appendChild(opt);
+  });
+
+  on(specSelect, 'change', () => {
+    const docList = $('doctor-booking-list');
+    docList.innerHTML = '';
+    if(!specSelect.value) return;
+
+    const doctorsInSpec = hospital.doctors.filter(d => d.specialty === specSelect.value);
+    doctorsInSpec.forEach(doc => {
+      const docCard = document.createElement('div');
+      docCard.className = 'card glass mt8';
+      docCard.innerHTML = `
+        <div class="row space-between">
+          <div>
+            <strong>${doc.name}</strong>
+            <div class="hint">${doc.qualification}</div>
+          </div>
+          <span class="badge ${doc.available ? 'open' : 'closed'}">${doc.available ? 'Available' : 'Unavailable'}</span>
+        </div>
+        <div class="row mt8 space-between">
+          <span>💰 ₹${doc.fee}</span>
+          <button class="btn sm" data-select-doctor="${doc.id}" ${!doc.available ? 'disabled' : ''}>Select</button>
+        </div>
+      `;
+      docList.appendChild(docCard);
+
+      if(doc.available) {
+        docCard.querySelector(`[data-select-doctor]`).addEventListener('click', () => {
+          window.selectedDoctor = doc;
         });
       }
     });
-  }
+  });
 
-  // Sort by price
-  results.sort((a,b) => a.price - b.price);
-  return results;
+  // Set min date to today
+  const today = new Date().toISOString().split('T')[0];
+  $('booking-date').min = today;
+  $('booking-date').value = today;
+
+  $('doctor-booking-modal').classList.remove('hidden');
 }
 
-on($('medicine-search-btn'),'click',()=>{
-  const query = ($('medicine-search-input').value||'').trim();
-  if(!query) return toast('Enter medicine name');
+on($('confirm-doctor-booking'), 'click', () => {
+  if(!window.selectedDoctor) return toast('Please select a doctor');
+  const date = $('booking-date').value;
+  const time = $('booking-time').value;
 
-  const results = searchMedicinesAcrossShops(query);
-  const box = $('medicine-search-results'); if(!box) return;
-  box.innerHTML = '';
+  if(!date || !time) return toast('Select date and time');
 
-  if(!results.length){
-    box.innerHTML = `<div class="card glass"><strong>No shops found with "${query}"</strong><div class="hint">Try a different medicine name</div></div>`;
-    return;
-  }
+  const booking = {
+    id: `BOOK_${Date.now()}`,
+    doctor: window.selectedDoctor,
+    hospital: selectedHospitalForBooking,
+    date: date,
+    time: time,
+    status: 'confirmed'
+  };
 
-  // Show top 5 shops by distance
-  const topShops = results.slice(0, 5);
+  // Save booking
+  const user = getCurrentUser();
+  const bookings = storageJSON(`medifind_bookings_${user}`) || [];
+  bookings.push(booking);
+  storageJSON(`medifind_bookings_${user}`, bookings);
 
-  const medicineUses = getMedicineUses(query);
-  const infoCard = document.createElement('div');
-  infoCard.className = 'card glass mb12';
-  infoCard.innerHTML = `
-    <strong>${query}</strong>
-    <div class="hint mt8">💊 Uses: ${medicineUses}</div>
-    <div class="row gap8 mt8">
-      <span class="badge">${results.length} shops available</span>
-      <span class="badge">Price range: ₹${Math.min(...results.map(r=>r.price)).toFixed(2)} - ₹${Math.max(...results.map(r=>r.price)).toFixed(2)}</span>
-    </div>
-  `;
-  box.appendChild(infoCard);
+  // Show confirmation
+  $('booking-doctor-display').textContent = window.selectedDoctor.name;
+  $('booking-specialty-display').textContent = window.selectedDoctor.specialty;
+  $('booking-hospital-display').textContent = selectedHospitalForBooking.name;
+  $('booking-datetime-display').textContent = `${date} at ${time}`;
+  $('booking-location-display').textContent = selectedHospitalForBooking.address || 'Location TBD';
 
-  topShops.forEach((med, idx) => {
-    const hoursStatus = isOpenNow(med.hours);
-    const card = document.createElement('div'); card.className = 'card glass';
-    card.innerHTML = `
-      <div class="row space-between">
-        <strong>#${idx+1} ${med.storeName}</strong>
-        <span class="badge ${hoursStatus.open ? 'open' : 'closed'}">${hoursStatus.label}</span>
-      </div>
-      <div class="addr">${med.storeContact}</div>
-      <div class="row mt8 gap8">
-        <span class="badge price">💰 ₹${med.price.toFixed(2)}</span>
-        <span class="badge km">📍 ${med.distance.toFixed(2)} km</span>
-        <span class="badge eta">ETA ${med.eta}</span>
-        <span class="badge">Stock: ${med.qty}</span>
-      </div>
-      <div class="row mt8 gap8">
-        <button class="btn sm" data-order-medicine="${med.storeName}|${med.medicineName}|${med.price}">Order</button>
-        <button class="btn outline sm" data-view-medicine="${query}">Details</button>
-      </div>
-    `;
-    box.appendChild(card);
-
-    card.querySelector('[data-view-medicine]').addEventListener('click', () => {
-      showMedicineDetailsModal(med.medicineName, medicineUses);
-    });
-
-    card.querySelector('[data-order-medicine]').addEventListener('click', (e) => {
-      const [store, medName, price] = e.target.dataset.orderMedicine.split('|');
-      addMedicineToCart(store, medName, parseFloat(price));
-    });
-  });
+  $('doctor-booking-modal').classList.add('hidden');
+  $('booking-confirm-modal').classList.remove('hidden');
+  toast('✅ Your appointment is confirmed!', 3000);
 });
 
-function showMedicineDetailsModal(medicineName, uses){
-  const modal = $('medicine-details-modal'); if(!modal) return;
-  $('medicine-detail-name').textContent = medicineName;
+on($('doctor-booking-close'), 'click', () => {
+  $('doctor-booking-modal').classList.add('hidden');
+});
 
-  const info = $('medicine-detail-info');
-  info.innerHTML = `
-    <label><strong>Medicine:</strong> ${medicineName}</label>
-    <label><strong>Uses:</strong></label>
-    <div class="card" style="background:var(--card);padding:10px;border-radius:10px;">
-      <small>${uses}</small>
-    </div>
-    <label class="hint mt12">⚠️ Disclaimer: This is for informational purposes only. Always consult with a healthcare professional before taking any medicine.</label>
-    <div class="row gap8 mt12">
-      <button id="medicine-details-close-btn" class="btn outline">Close</button>
-    </div>
-  `;
+on($('order-confirm-close'), 'click', () => {
+  $('order-confirm-modal').classList.add('hidden');
+});
 
-  on($('medicine-details-close-btn'), 'click', () => modal.classList.add('hidden'));
-  modal.classList.remove('hidden');
-}
+on($('booking-confirm-close'), 'click', () => {
+  $('booking-confirm-modal').classList.add('hidden');
+});
 
-function addMedicineToCart(storeName, medicineName, price){
-  currentCart.push({
-    name: medicineName,
-    price: price,
-    quantity: 1,
-    pharmacyName: storeName,
-    pharmacyId: storeName
-  });
-  toast(`${medicineName} added to cart from ${storeName}`);
-  // Redirect to orders view
-  showView('medicineorder');
-  renderCart();
-  $('cart-modal').classList.remove('hidden');
-}
+on($('cancel-doctor-booking'), 'click', () => {
+  $('doctor-booking-modal').classList.add('hidden');
+});
 
-on($('medicine-search-input'),'keydown',(e)=>{
-  if(e.key==='Enter'){
-    $('medicine-search-btn').click();
+// Init on page load
+on(window, 'load', () => {
+  if(getCurrentUser()) {
+    renderQuickOrderMedicines();
+    initAIChatbox();
   }
 });
 
-on($('medicine-refresh-gps'),'click',()=>{ requestGPS(); toast('Location refreshed'); });
-
-// ===== LIVE TRACKING =====
-function initTrackingDashboard(){
-  gpsSimulator.initTrackingMap('tracking-map');
-  renderActiveTracks();
-
-  const updateInterval = setInterval(()=>{
-    if(!$('tracking-view').classList.contains('hidden')){
-      renderActiveTracks();
-      gpsSimulator.updateMapMarkers();
-    }
-  }, 2000);
-}
-
-function renderActiveTracks(){
-  const user = getCurrentUser(); if(!user) return;
-  const tracks = gpsSimulator.getAllTracks().filter(t => t.type === 'delivery'); // Only delivery orders
-  const box = $('active-tracks-list'); if(!box) return;
-
-  box.innerHTML = '';
-
-  if(!tracks.length){
-    $('tracking-status').textContent = 'No active deliveries';
-    box.innerHTML = '<div class="card glass"><small class="hint">No active medicine deliveries</small></div>';
-    return;
-  }
-
-  $('tracking-status').textContent = `Tracking ${tracks.length} active ${tracks.length === 1 ? 'delivery' : 'deliveries'}`;
-
-  tracks.forEach(track => {
-    const card = document.createElement('div'); card.className = 'card glass mt8';
-    card.innerHTML = `
-      <div class="row space-between">
-        <strong>📦 Medicine Order</strong>
-        <span class="badge">${track.status}</span>
-      </div>
-      <div class="row mt8 gap8">
-        <span>ETA: ${track.eta} min</span>
-        <span>Progress: ${track.progress}%</span>
-        <span>Distance: ${(km([track.currentLat, track.currentLon], [track.destLat, track.destLon])).toFixed(2)} km</span>
-      </div>
-      <div class="progress" style="width:100%;height:6px;background:var(--edge);border-radius:3px;margin-top:8px;overflow:hidden;">
-        <div style="width:${track.progress}%;height:100%;background:#3b82f6;"></div>
-      </div>
-    `;
-    box.appendChild(card);
-  });
-}
-
-on($('refresh-tracking'),'click',()=>{ renderActiveTracks(); gpsSimulator.updateMapMarkers(); toast('Tracking refreshed'); });
 
 // Startup
 document.addEventListener('DOMContentLoaded',()=>{
