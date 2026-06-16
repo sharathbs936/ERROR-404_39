@@ -51,7 +51,6 @@ const VIEWS = {
   report: $('report-view'),
   settings: $('settings-view'),
   hospitals: $('hospitals-view'),
-  orders: $('orders-view'),
   pharmacyLogin: $('pharmacy-login-view'),
   pharmacyRegister: $('pharmacy-register-view'),
   pharmacyDash: $('pharmacy-dashboard-view'),
@@ -74,6 +73,12 @@ function showView(name){
       else if (typeof initStoreMap === 'function') initStoreMap();
     }, 60);
   }
+  if (name === 'hospitalDash') {
+    setTimeout(()=>{
+      if (window.hospitalMap && window.hospitalMap.invalidateSize) { try{ window.hospitalMap.invalidateSize(); }catch{} }
+      else if (typeof initHospitalMap === 'function') initHospitalMap();
+    }, 60);
+  }
 }
 on($('brand-home'),'click',()=>{ getCurrentUser()? (showView('home'), ensureMap()) : showView('landing'); });
 on($('go-locator'),'click',()=>showView('login'));
@@ -90,8 +95,8 @@ document.querySelectorAll('.side-btn').forEach(btn=>{
     if (tab==='settings') showView('settings');
     else if (tab==='profile') showView('profile');
     else if (tab==='report') showView('report');
-    else if (tab==='orders'){ showView('orders'); renderOrdersList(); }
     else if (tab==='hospitals'){ showView('hospitals'); renderNearestHospitals(); }
+    else if (tab==='ai-chat'){ openAIChatModal(); document.querySelectorAll('.side-btn').forEach(b=>b.classList.remove('active')); }
     else showView('home');
   });
 });
@@ -133,6 +138,7 @@ on($('login-submit'),'click',()=>{
   if(!rec || rec.password !== p) return toast('Invalid username or password');
   setCurrentUser(u); hydrateProfileUI(u, rec); loadAvatar(u);
   showView('home'); ensureMap(); loadPharmacyData(); hydrateHistoryUI(rec.history||[]);
+  initAIChatbox();
   toast('Welcome back 👋');
 });
 
@@ -291,100 +297,6 @@ on($('store-logout-btn'),'click',()=>{
   toast('Store signed out');
 });
 
-// Pharmacy tabs
-on($('tab-medicines'),'click',()=>{
-  $('tab-medicines').classList.add('active');
-  $('tab-hospitals').classList.remove('active');
-  $('medicines-tab').classList.remove('hidden');
-  $('hospitals-tab').classList.add('hidden');
-});
-
-on($('tab-hospitals'),'click',()=>{
-  $('tab-hospitals').classList.add('active');
-  $('tab-medicines').classList.remove('active');
-  $('medicines-tab').classList.add('hidden');
-  $('hospitals-tab').classList.remove('hidden');
-  loadHospitalInfo();
-});
-
-function saveHospitalInfo(){
-  const user = getActiveStoreUser(); if(!user) return;
-  const hospData = {
-    name: ($('hosp-name').value||'').trim(),
-    specialties: ($('hosp-specialties').value||'').split(',').map(s=>s.trim()).filter(s=>s),
-    contact: ($('hosp-contact').value||'').trim(),
-    address: ($('hosp-address').value||'').trim(),
-    hours24: !!($('hosp-247').checked),
-    open: $('hosp-open').value,
-    close: $('hosp-close').value
-  };
-
-  if(!hospData.name) return toast('Enter hospital name');
-  if(!hospData.specialties.length) return toast('Enter at least one specialty');
-
-  storageJSON(`medifind_pharmacy_hospital_${user}`, hospData);
-  toast('Hospital information saved');
-  displayHospitalInfo(hospData);
-}
-
-function loadHospitalInfo(){
-  const user = getActiveStoreUser(); if(!user) return;
-  const hospData = storageJSON(`medifind_pharmacy_hospital_${user}`);
-
-  if(hospData){
-    $('hosp-name').value = hospData.name || '';
-    $('hosp-specialties').value = (hospData.specialties || []).join(', ');
-    $('hosp-contact').value = hospData.contact || '';
-    $('hosp-address').value = hospData.address || '';
-    $('hosp-247').checked = !!hospData.hours24;
-    $('hosp-open').value = hospData.open || '09:00';
-    $('hosp-close').value = hospData.close || '21:00';
-    displayHospitalInfo(hospData);
-  }
-
-  on($('hosp-247'),'change',()=>{
-    const hoursDiv = $('hosp-hours');
-    if($('hosp-247').checked) hoursDiv.classList.add('hidden');
-    else hoursDiv.classList.remove('hidden');
-  });
-}
-
-function displayHospitalInfo(hospData){
-  const display = $('hospital-info-display');
-  const content = $('hospital-info-content');
-
-  if(!hospData || !hospData.name){
-    display.classList.add('hidden');
-    return;
-  }
-
-  content.innerHTML = `
-    <div class="row space-between">
-      <strong>${hospData.name}</strong>
-    </div>
-    <div class="hint mt8">
-      📍 ${hospData.address}<br/>
-      📞 ${hospData.contact}<br/>
-      ⏰ ${hospData.hours24 ? 'Open 24/7' : `${hospData.open} - ${hospData.close}`}
-    </div>
-    <div class="row gap8 mt8">
-      ${hospData.specialties.map(s => `<span class="badge specialty">${s}</span>`).join('')}
-    </div>
-  `;
-
-  display.classList.remove('hidden');
-}
-
-on($('save-hospital'),'click',()=>{ saveHospitalInfo(); });
-on($('clear-hospital'),'click',()=>{
-  $('hosp-name').value = '';
-  $('hosp-specialties').value = '';
-  $('hosp-contact').value = '';
-  $('hosp-address').value = '';
-  $('hosp-247').checked = false;
-  $('hospital-info-display').classList.add('hidden');
-});
-
 const storePublish=$('store-publish'), storeCoordsEl=$('store-coords');
 const hours247=$('hours-247'), hoursOpen=$('hours-open'), hoursClose=$('hours-close');
 
@@ -494,6 +406,310 @@ on($('export-json'),'click',()=>{
   const data=getInventory(); const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${storeKey||'medifind_store'}.json`; a.click(); URL.revokeObjectURL(url);
   toast('Exported JSON');
+});
+
+// ===== Hospital Publisher Auth & Portal (mirrors pharmacy) =====
+function getHospitalAccounts(){ return storageJSON('medifind_hospital_accounts')||{}; }
+function saveHospitalAccounts(a){ storageJSON('medifind_hospital_accounts', a); }
+function setActiveHospitalUser(u){ localStorage.setItem('medifind_active_hospital_user', u); }
+function getActiveHospitalUser(){ return localStorage.getItem('medifind_active_hospital_user'); }
+
+let hospitalPubKey = null;
+let hospitalMarker = null, hospitalLatLng = null;
+
+on($('go-hospital-register'),'click',()=>showView('hospitalRegister'));
+on($('back-to-hospital-login'),'click',()=>showView('hospitalLogin'));
+
+on($('hospital-reg-submit'),'click',()=>{
+  const uRaw = ($('hospital-reg-user').value||'').trim();
+  const p = ($('hospital-reg-pass').value||'').trim();
+  const c = ($('hospital-reg-confirm').value||'').trim();
+  const name = ($('hospital-reg-name').value||'').trim();
+  const contact = ($('hospital-reg-contact').value||'').trim();
+  const u = normUser(uRaw);
+  if(!u || !p) return toast('Hospital username & password required');
+  if(p.length < 4) return toast('Password must be at least 4 chars');
+  if(p !== c) return toast('Passwords do not match');
+  const accounts = getHospitalAccounts();
+  if(accounts[u]) return toast('Hospital username exists');
+  accounts[u] = {
+    password: p,
+    profile: {
+      name: name || u, contact, publish: false,
+      lat: null, lon: null, hours24: false,
+      open: '08:00', close: '20:00',
+      address: '', phone: contact, email: '',
+      specialties: [], amenities: {}
+    }
+  };
+  saveHospitalAccounts(accounts);
+  storageJSON(`medifind_hospital_pub_${u}`, []);
+  toast('Hospital registered! Log in now.');
+  showView('hospitalLogin');
+});
+
+on($('hospital-login-btn'),'click',()=>{
+  const u = normUser(($('hospital-login-user').value||'').trim());
+  const p = ($('hospital-login-pass').value||'').trim();
+  if(!u || !p) return toast('Enter hospital username & password');
+  const accounts = getHospitalAccounts();
+  const rec = accounts[u];
+  if(!rec || rec.password !== p) return toast('Invalid hospital credentials');
+  setActiveHospitalUser(u);
+  const prof = rec.profile || {};
+  $('hospital-label').textContent = prof.name || u;
+  hospitalPubKey = `medifind_hospital_pub_${u}`;
+  showView('hospitalDash');
+  initHospitalMap();
+  loadHospitalPublisherUI();
+  toast('Hospital dashboard ready');
+});
+
+on($('hospital-logout-btn'),'click',()=>{
+  localStorage.removeItem('medifind_active_hospital_user');
+  hospitalPubKey = null;
+  showView('landing');
+  renderResume();
+  toast('Hospital signed out');
+});
+
+// Hospital dashboard tabs
+function switchHospitalTab(activeId, tabId){
+  ['tab-hospital-info','tab-hospital-doctors','tab-hospital-services'].forEach(id=>{
+    $(id)?.classList.toggle('active', id === activeId);
+  });
+  ['hospital-info-tab','hospital-doctors-tab','hospital-services-tab'].forEach(id=>{
+    $(id)?.classList.toggle('hidden', id !== tabId);
+  });
+}
+on($('tab-hospital-info'),'click',()=> switchHospitalTab('tab-hospital-info','hospital-info-tab'));
+on($('tab-hospital-doctors'),'click',()=>{ switchHospitalTab('tab-hospital-doctors','hospital-doctors-tab'); renderHospitalDoctors(); });
+on($('tab-hospital-services'),'click',()=>{ switchHospitalTab('tab-hospital-services','hospital-services-tab'); loadHospitalServicesUI(); });
+
+const hospitalPublishCheck = $('hospital-publish-check');
+const hospitalCoordsEl = $('hospital-coords');
+const hospitalHours247 = $('hospital-hours-247');
+const hospitalHoursOpen = $('hospital-hours-open');
+const hospitalHoursClose = $('hospital-hours-close');
+
+function getHospitalProfileForUser(u){
+  const accounts = getHospitalAccounts();
+  return (accounts[u] && accounts[u].profile) ? accounts[u].profile : null;
+}
+function saveHospitalProfileForUser(u, prof){
+  const accounts = getHospitalAccounts();
+  if(!accounts[u]) return;
+  accounts[u].profile = prof;
+  saveHospitalAccounts(accounts);
+  syncPublishedHospital(u);
+}
+
+function syncPublishedHospital(u){
+  const prof = getHospitalProfileForUser(u);
+  if(!prof) return;
+  const doctors = storageJSON(`medifind_hospital_pub_${u}`) || [];
+  const list = storageJSON('medifind_hospitals_list') || [];
+  const hospitalId = `pub_${u}`;
+
+  if(prof.publish && prof.lat && prof.lon){
+    const hospitalObj = {
+      id: hospitalId,
+      name: prof.name || u,
+      contact: prof.phone || prof.contact || '',
+      address: prof.address || 'Kengeri, Bangalore',
+      lat: prof.lat,
+      lon: prof.lon,
+      hours24: !!prof.hours24,
+      open: prof.open || '08:00',
+      close: prof.close || '20:00',
+      specialties: prof.specialties || [],
+      amenities: prof.amenities || {},
+      doctors: doctors,
+      publishedBy: u
+    };
+    storageJSON(`medifind_hospital_${hospitalId}`, hospitalObj);
+    if(!list.includes(hospitalId)) list.push(hospitalId);
+    storageJSON('medifind_hospitals_list', list);
+  } else {
+    const idx = list.indexOf(hospitalId);
+    if(idx >= 0){ list.splice(idx, 1); storageJSON('medifind_hospitals_list', list); }
+    localStorage.removeItem(`medifind_hospital_${hospitalId}`);
+  }
+}
+
+function loadHospitalPublisherUI(){
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  if(hospitalHours247) hospitalHours247.checked = !!prof.hours24;
+  if(hospitalHoursOpen) hospitalHoursOpen.value = prof.open || '08:00';
+  if(hospitalHoursClose) hospitalHoursClose.value = prof.close || '20:00';
+  if(hospitalPublishCheck) hospitalPublishCheck.checked = !!prof.publish;
+  if(hospitalCoordsEl){
+    hospitalCoordsEl.textContent = (prof.lat && prof.lon)
+      ? `Lat: ${(+prof.lat).toFixed(6)}, Lon: ${(+prof.lon).toFixed(6)}`
+      : 'Lat: –, Lon: –';
+  }
+  if($('hospital-address')) $('hospital-address').value = prof.address || '';
+  if($('hospital-phone')) $('hospital-phone').value = prof.phone || prof.contact || '';
+  if($('hospital-email')) $('hospital-email').value = prof.email || '';
+  renderHospitalDoctors();
+  loadHospitalServicesUI();
+}
+
+function initHospitalMap(){
+  const el = $('hospital-map'); if(!el) return;
+  if(!window.hospitalMap){
+    window.hospitalMap = L.map('hospital-map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(window.hospitalMap);
+  }
+  const user = getActiveHospitalUser();
+  const prof = getHospitalProfileForUser(user) || {};
+  const def = (prof.lat && prof.lon) ? [prof.lat, prof.lon] : [12.9065, 77.4845];
+  window.hospitalMap.setView(def, 16);
+
+  if(!hospitalMarker){
+    hospitalMarker = L.marker(def, {draggable:true}).addTo(window.hospitalMap).bindPopup('Your hospital');
+    hospitalMarker.on('dragend', ()=>{ const ll = hospitalMarker.getLatLng(); setHospitalLocation(ll.lat, ll.lng); });
+  } else hospitalMarker.setLatLng(def);
+
+  setHospitalLocation(def[0], def[1]);
+  window.hospitalMap.off('click');
+  window.hospitalMap.on('click', e=>{ setHospitalLocation(e.latlng.lat, e.latlng.lng); hospitalMarker.setLatLng(e.latlng); });
+  setTimeout(()=>{ try{ window.hospitalMap.invalidateSize(); }catch{} }, 50);
+}
+
+function setHospitalLocation(lat, lon){
+  hospitalLatLng = [lat, lon];
+  if(hospitalCoordsEl) hospitalCoordsEl.textContent = `Lat: ${lat.toFixed(6)}, Lon: ${lon.toFixed(6)}`;
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.lat = lat; prof.lon = lon;
+  prof.publish = !!(hospitalPublishCheck && hospitalPublishCheck.checked);
+  if(!prof.name) prof.name = user;
+  saveHospitalProfileForUser(user, prof);
+}
+
+on($('hospital-use-loc'),'click',()=>{
+  navigator.geolocation?.getCurrentPosition(
+    pos=>{
+      const {latitude, longitude} = pos.coords;
+      hospitalMarker?.setLatLng([latitude, longitude]);
+      window.hospitalMap?.setView([latitude, longitude], 17);
+      setHospitalLocation(latitude, longitude);
+      toast('Hospital location updated');
+    },
+    ()=> toast('Location blocked. Allow GPS.'),
+    { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+  );
+});
+
+on(hospitalPublishCheck,'change',()=>{
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.publish = !!(hospitalPublishCheck && hospitalPublishCheck.checked);
+  if(hospitalLatLng){ prof.lat = hospitalLatLng[0]; prof.lon = hospitalLatLng[1]; }
+  saveHospitalProfileForUser(user, prof);
+  toast(prof.publish ? 'Hospital published to patient app' : 'Hospital unpublished');
+});
+
+on($('hospital-save-hours'),'click',()=>{
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.hours24 = !!(hospitalHours247 && hospitalHours247.checked);
+  prof.open = (hospitalHoursOpen && hospitalHoursOpen.value) || '08:00';
+  prof.close = (hospitalHoursClose && hospitalHoursClose.value) || '20:00';
+  saveHospitalProfileForUser(user, prof);
+  toast('Hospital hours saved');
+});
+
+on($('hospital-save-info'),'click',()=>{
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.address = ($('hospital-address')?.value||'').trim();
+  prof.phone = ($('hospital-phone')?.value||'').trim();
+  prof.email = ($('hospital-email')?.value||'').trim();
+  saveHospitalProfileForUser(user, prof);
+  toast('Hospital info saved');
+});
+
+on($('hospital-publish-btn'),'click',()=>{
+  if(hospitalPublishCheck){
+    hospitalPublishCheck.checked = true;
+    hospitalPublishCheck.dispatchEvent(new Event('change'));
+  }
+});
+
+function getHospitalDoctors(){ if(!hospitalPubKey) return []; return storageJSON(hospitalPubKey)||[]; }
+function saveHospitalDoctors(docs){ if(!hospitalPubKey) return; storageJSON(hospitalPubKey, docs); syncPublishedHospital(getActiveHospitalUser()); }
+
+function renderHospitalDoctors(){
+  const body = $('doctors-body'); if(!body) return;
+  const docs = getHospitalDoctors();
+  body.innerHTML = '';
+  docs.forEach((doc, idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${doc.name}</td><td>${doc.specialty}</td><td>₹${Number(doc.fee).toFixed(0)}</td>
+      <td><span class="badge ${doc.available ? 'open' : 'closed'}">${doc.available ? 'Available' : 'Unavailable'}</span></td>
+      <td><button data-idx="${idx}" class="del-btn">Delete</button></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('.del-btn').forEach(btn=> on(btn,'click', e=>{
+    const i = Number(e.target.getAttribute('data-idx'));
+    const arr = getHospitalDoctors(); arr.splice(i, 1); saveHospitalDoctors(arr); renderHospitalDoctors();
+    toast('Doctor removed');
+  }));
+}
+
+on($('add-doctor'),'click',()=>{
+  const name = ($('doctor-name')?.value||'').trim();
+  const specialty = ($('doctor-specialty')?.value||'').trim();
+  const fee = Number($('doctor-fee')?.value||0);
+  const qualification = ($('doctor-qualification')?.value||'').trim();
+  const available = !!($('doctor-available')?.checked);
+  if(!name || !specialty) return toast('Enter doctor name & specialty');
+  const docs = getHospitalDoctors();
+  docs.push({
+    id: `doc_${Date.now()}_${Math.random().toString(36).substr(2,6)}`,
+    name, specialty, qualification, available, fee
+  });
+  saveHospitalDoctors(docs);
+  renderHospitalDoctors();
+  $('doctor-name').value = ''; $('doctor-specialty').value = '';
+  $('doctor-fee').value = ''; $('doctor-qualification').value = '';
+  $('doctor-available').checked = false;
+  toast('Doctor added');
+});
+
+function loadHospitalServicesUI(){
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  if($('hospital-specialties')) $('hospital-specialties').value = (prof.specialties || []).join(', ');
+  const am = prof.amenities || {};
+  if($('amenity-ambulance')) $('amenity-ambulance').checked = !!am.ambulance;
+  if($('amenity-icu')) $('amenity-icu').checked = !!am.icu;
+  if($('amenity-pharmacy')) $('amenity-pharmacy').checked = !!am.pharmacy;
+  if($('amenity-lab')) $('amenity-lab').checked = !!am.lab;
+}
+
+on($('hospital-save-services'),'click',()=>{
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.specialties = ($('hospital-specialties')?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  saveHospitalProfileForUser(user, prof);
+  toast('Specialties saved');
+});
+
+on($('hospital-save-amenities'),'click',()=>{
+  const user = getActiveHospitalUser(); if(!user) return;
+  const prof = getHospitalProfileForUser(user) || {};
+  prof.amenities = {
+    ambulance: !!($('amenity-ambulance')?.checked),
+    icu: !!($('amenity-icu')?.checked),
+    pharmacy: !!($('amenity-pharmacy')?.checked),
+    lab: !!($('amenity-lab')?.checked)
+  };
+  saveHospitalProfileForUser(user, prof);
+  toast('Amenities saved');
 });
 
 // ===== Hospitals =====
@@ -1098,14 +1314,15 @@ on($('camera-input'),'change',async (e)=>{
 function renderResume(){
   const card=$('resume-card'), wrap=$('resume-buttons'); if(!card||!wrap) return;
   wrap.innerHTML='';
-  const consumer=getCurrentUser(); const store=getActiveStoreUser();
-  if(!consumer && !store){ card.classList.add('hidden'); return; }
+  const consumer=getCurrentUser(); const store=getActiveStoreUser(); const hospital=getActiveHospitalUser();
+  if(!consumer && !store && !hospital){ card.classList.add('hidden'); return; }
   if(consumer){
     const b=document.createElement('button'); b.className='btn'; b.textContent='Continue as consumer (@'+consumer+')';
     b.addEventListener('click',()=>{
       const users=getUsers(); const rec=users[consumer]||{history:[]};
       hydrateProfileUI(consumer, rec); loadAvatar(consumer);
       showView('home'); ensureMap(); loadPharmacyData(); hydrateHistoryUI(rec.history||[]);
+      initAIChatbox();
     });
     wrap.appendChild(b);
   }
@@ -1117,6 +1334,16 @@ function renderResume(){
       storeKey=`medifind_store_${store}`; showView('pharmacyDash'); initStoreMap(); renderInventory(); loadHoursUI();
     });
     wrap.appendChild(b2);
+  }
+  if(hospital){
+    const b3=document.createElement('button'); b3.className='btn outline'; b3.textContent='Continue as hospital ('+hospital+')';
+    b3.addEventListener('click',()=>{
+      const prof=(getHospitalAccounts()[hospital]||{}).profile || {};
+      $('hospital-label').textContent = prof.name || hospital;
+      hospitalPubKey=`medifind_hospital_pub_${hospital}`;
+      showView('hospitalDash'); initHospitalMap(); loadHospitalPublisherUI();
+    });
+    wrap.appendChild(b3);
   }
   card.classList.remove('hidden');
 }
@@ -1526,20 +1753,44 @@ on($('hospital-search-input'), 'input', () => {
 // Bind sort
 on($('sort-select'),'change', ()=> filterList());
 
-// ===== AI CHATBOX & MEDICINE ORDERING =====
+// ===== AI CHATBOX — Symptom-based medicine & location suggestions =====
+
+const SJBIT_COORDS = [12.9065, 77.4845];
+const KENGERI_LANDMARKS = [
+  { name: 'SJBIT College, Kengeri', lat: 12.9065, lon: 77.4845 },
+  { name: 'Kengeri Bus Terminal', lat: 12.9100, lon: 77.4820 },
+  { name: 'Kengeri Railway Station', lat: 12.9140, lon: 77.4780 },
+];
+
+function getAreaLabel(lat, lon){
+  if(!lat || !lon) return 'Kengeri / SJBIT area';
+  const dSJBIT = km([lat, lon], SJBIT_COORDS);
+  if(dSJBIT < 2) return 'near SJBIT College, Kengeri';
+  if(dSJBIT < 5) return 'near Kengeri, Bangalore';
+  return 'your current location';
+}
+
+function medicineMatches(suggested, inventoryName){
+  const s = suggested.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const inv = inventoryName.toLowerCase();
+  const tokens = s.split(/\s+/).filter(t => t.length > 2);
+  return tokens.some(t => inv.includes(t));
+}
 
 // Symptom to Medicine mapping
 const symptomMedicineMap = {
-  'fever': ['Paracetamol 650mg', 'Ibuprofen 400mg', 'Aspirin'],
-  'cough': ['Dextromethorphan', 'Ambroxol', 'Cough syrup'],
-  'cold': ['Cetirizine 10mg', 'Levocetirizine 5mg', 'Vitamin C'],
-  'headache': ['Paracetamol 650mg', 'Ibuprofen 400mg', 'Aspirin'],
-  'allergy': ['Cetirizine 10mg', 'Levocetirizine 5mg'],
-  'acidity': ['Pantoprazole 40mg', 'Omeprazole 20mg', 'Antacid Gel'],
-  'body pain': ['Diclofenac 50mg', 'Ibuprofen 400mg', 'Paracetamol 650mg'],
-  'diabetes': ['Metformin 500mg', 'Glimepiride 1mg'],
-  'nausea': ['Ondansetron 4mg', 'Domperidone 10mg'],
-  'diarrhea': ['ORS Sachet', 'Loperamide'],
+  'fever': ['Paracetamol 650', 'Ibuprofen 400', 'Dolo 650'],
+  'cough': ['Dextromethorphan', 'Ambroxol', 'cough syrup'],
+  'cold': ['Cetirizine 10', 'Levocetirizine 5', 'Vitamin C'],
+  'headache': ['Paracetamol 650', 'Ibuprofen 400', 'Aspirin'],
+  'allergy': ['Cetirizine 10', 'Levocetirizine 5'],
+  'acidity': ['Pantoprazole 40', 'Omeprazole 20', 'Antacid'],
+  'body pain': ['Diclofenac 50', 'Ibuprofen 400', 'Paracetamol 650'],
+  'diabetes': ['Metformin 500', 'Glimepiride'],
+  'nausea': ['Ondansetron 4', 'Domperidone 10'],
+  'diarrhea': ['ORS', 'Loperamide'],
+  'sore throat': ['Paracetamol 650', 'cough syrup', 'Azithromycin'],
+  'vomiting': ['Ondansetron 4', 'Domperidone 10'],
 };
 
 // Symptom to Specialist mapping
@@ -1554,16 +1805,27 @@ const symptomSpecialistMap = {
   'diabetes': ['Endocrinology', 'General Medicine'],
   'heart': ['Cardiology'],
   'chest pain': ['Cardiology', 'General Medicine'],
+  'sore throat': ['ENT', 'General Medicine'],
+  'vomiting': ['Gastroenterology', 'General Medicine'],
 };
 
-let chatHistory = [];
+let aiChatInitialized = false;
 
-// AI Chatbox Functions
+function openAIChatModal(){
+  $('ai-chat-modal')?.classList.remove('hidden');
+  const box = $('ai-chat-messages');
+  if(box && !box.children.length){
+    const area = getAreaLabel(userCoords?.[0], userCoords?.[1]);
+    addChatMessage('ai', `👋 Hi! I'm your AI Symptom Assistant. Describe your symptoms and I'll suggest medicines, nearby medical shops & hospitals ${area}.`);
+  }
+  setTimeout(() => $('ai-chat-input')?.focus(), 100);
+}
+
 function initAIChatbox(){
-  on($('ai-chat-toggle'), 'click', () => {
-    $('ai-chat-modal').classList.remove('hidden');
-    setTimeout(() => $('ai-chat-input').focus(), 100);
-  });
+  if(aiChatInitialized) return;
+  aiChatInitialized = true;
+
+  on($('ai-chat-toggle'), 'click', openAIChatModal);
 
   on($('ai-chat-close'), 'click', () => {
     $('ai-chat-modal').classList.add('hidden');
@@ -1582,7 +1844,6 @@ function initAIChatbox(){
     }
   });
 
-  // Symptom quick buttons
   document.querySelectorAll('[data-symptom]').forEach(btn => {
     on(btn, 'click', () => {
       const symptom = btn.dataset.symptom;
@@ -1600,7 +1861,7 @@ function addChatMessage(role, content) {
   msg.style.justifyContent = role === 'user' ? 'flex-end' : 'flex-start';
 
   const bubble = document.createElement('div');
-  bubble.style.maxWidth = '80%';
+  bubble.style.maxWidth = '85%';
   bubble.style.padding = '10px 14px';
   bubble.style.borderRadius = '10px';
   bubble.style.wordWrap = 'break-word';
@@ -1617,49 +1878,62 @@ function addChatMessage(role, content) {
   msg.appendChild(bubble);
   box.appendChild(msg);
   box.scrollTop = box.scrollHeight;
+
+  bubble.querySelectorAll('[data-route-pharm]').forEach(btn => {
+    on(btn, 'click', () => {
+      const lat = Number(btn.dataset.lat), lon = Number(btn.dataset.lon);
+      if(userCoords && lat && lon){
+        const url = `https://www.google.com/maps/dir/?api=1&origin=${userCoords[0]},${userCoords[1]}&destination=${lat},${lon}&travelmode=driving`;
+        window.open(url, '_blank');
+        toast('🗺️ Opening directions to pharmacy...');
+      }
+    });
+  });
+  bubble.querySelectorAll('[data-route-hosp]').forEach(btn => {
+    on(btn, 'click', () => {
+      routeToHospital(btn.dataset.id, Number(btn.dataset.lat), Number(btn.dataset.lon), btn.dataset.name);
+    });
+  });
 }
 
 function analyzeSymptomsAI(userInput) {
   const input = userInput.toLowerCase();
-
-  // Add user message
   addChatMessage('user', userInput);
 
-  // Find matching medicines and specialists
+  const lat = userCoords?.[0] || SJBIT_COORDS[0];
+  const lon = userCoords?.[1] || SJBIT_COORDS[1];
+  const areaLabel = getAreaLabel(lat, lon);
+
   let suggestedMedicines = [];
   let suggestedSpecialists = [];
+  const matchedSymptoms = [];
 
-  for(let symptom in symptomMedicineMap) {
+  for(const symptom in symptomMedicineMap) {
     if(input.includes(symptom)) {
+      matchedSymptoms.push(symptom);
       suggestedMedicines = [...new Set([...suggestedMedicines, ...symptomMedicineMap[symptom]])];
       suggestedSpecialists = [...new Set([...suggestedSpecialists, ...(symptomSpecialistMap[symptom] || [])])];
     }
   }
 
   if(!suggestedMedicines.length) {
-    addChatMessage('ai', '😊 I understand you\'re experiencing symptoms. Could you describe them more clearly? Try: fever, cough, cold, headache, allergy, acidity, body pain, etc.');
+    addChatMessage('ai', '😊 I understand you\'re experiencing symptoms. Could you describe them more clearly?<br/><br/>Try: <strong>fever</strong>, <strong>cough</strong>, <strong>cold</strong>, <strong>headache</strong>, <strong>allergy</strong>, <strong>acidity</strong>, <strong>body pain</strong>, <strong>nausea</strong>, etc.');
     return;
   }
 
-  // Find pharmacies with suggested medicines
-  const stores = getStores();
   const pharmaciesWithMedicines = [];
-
+  const stores = getStores();
   for(const storeUser in stores) {
     const prof = stores[storeUser]?.profile || {};
     if(!prof.publish || !prof.lat || !prof.lon) continue;
-
-    const storeInvKey = `medifind_store_${storeUser}`;
-    const inventory = storageJSON(storeInvKey) || [];
-
+    const inventory = storageJSON(`medifind_store_${storeUser}`) || [];
     const availableMedicines = inventory.filter(med =>
-      suggestedMedicines.some(suggested => med.name.toLowerCase().includes(suggested.toLowerCase()))
+      suggestedMedicines.some(s => medicineMatches(s, med.name))
     );
-
     if(availableMedicines.length > 0) {
-      const dist = km([userCoords[0] || 12.9065, userCoords[1] || 77.4845], [prof.lat, prof.lon]);
+      const dist = km([lat, lon], [prof.lat, prof.lon]);
       pharmaciesWithMedicines.push({
-        name: prof.name,
+        name: prof.name || storeUser,
         distance: dist,
         medicines: availableMedicines,
         lat: prof.lat,
@@ -1667,119 +1941,63 @@ function analyzeSymptomsAI(userInput) {
       });
     }
   }
-
   pharmaciesWithMedicines.sort((a,b) => a.distance - b.distance);
   const topPharmacies = pharmaciesWithMedicines.slice(0, 3);
 
-  // Find hospitals with specialists
-  const hospitals = findNearestHospitals(userCoords[0] || 12.9065, userCoords[1] || 77.4845, 3);
-  const relevantHospitals = hospitals.filter(h =>
-    suggestedSpecialists.some(spec => h.specialties && h.specialties.some(s => s.toLowerCase().includes(spec.toLowerCase())))
-  );
+  const allHospitals = findNearestHospitals(lat, lon, 10);
+  const relevantHospitals = allHospitals.filter(h =>
+    !suggestedSpecialists.length ||
+    suggestedSpecialists.some(spec => h.specialties?.some(s => s.toLowerCase().includes(spec.toLowerCase())))
+  ).slice(0, 3);
 
-  // Build AI response
-  let response = `<strong>💊 Suggested Treatment Plan:</strong><br/>`;
-  response += `<div class="hint mt8">Based on your symptoms: <strong>${userInput}</strong></div>`;
+  const nearestLandmark = KENGERI_LANDMARKS.reduce((best, lm) => {
+    const d = km([lat, lon], [lm.lat, lm.lon]);
+    return !best || d < best.dist ? { ...lm, dist: d } : best;
+  }, null);
 
-  response += `<div class="mt8"><strong>Recommended Medicines:</strong> ${suggestedMedicines.slice(0, 3).join(', ')}</div>`;
+  let response = `<strong>💊 Suggested Treatment Plan</strong>`;
+  response += `<div class="hint mt8">Symptoms: <strong>${matchedSymptoms.join(', ')}</strong> · Location: ${areaLabel}</div>`;
+  response += `<div class="mt8"><strong>Recommended Medicines:</strong><br/>${suggestedMedicines.slice(0, 4).map(m => `• ${m}`).join('<br/>')}</div>`;
 
-  response += `<div class="mt8"><strong>📍 Nearby Pharmacies (${topPharmacies.length} found):</strong><br/>`;
-  topPharmacies.forEach((p, i) => {
-    response += `${i+1}. <strong>${p.name}</strong> (${p.distance.toFixed(1)} km)<br/>`;
-    response += `   Available: ${p.medicines.slice(0, 2).map(m => m.name).join(', ')}<br/>`;
-  });
-  response += `</div>`;
-
-  response += `<div class="mt8"><strong>🏥 Nearby Hospitals with ${suggestedSpecialists[0] || 'specialists'} (${relevantHospitals.length} found):</strong><br/>`;
-  relevantHospitals.slice(0, 2).forEach((h, i) => {
-    response += `${i+1}. <strong>${h.name}</strong> (${h._dist.toFixed(1)} km)<br/>`;
-  });
-  response += `</div>`;
-
-  response += `<div class="hint mt8" style="font-size:12px;">⚠️ This is not medical advice. Please consult with a healthcare professional.</div>`;
-
-  addChatMessage('ai', response);
-}
-
-// Medicine Ordering
-function renderQuickOrderMedicines() {
-  if(!userCoords) userCoords = [12.9065, 77.4845];
-
-  const nearestPharmacies = findNearestPharmacies(userCoords[0], userCoords[1], 3);
-  const box = $('quick-order-list');
-  if(!box) return;
-
-  box.innerHTML = '';
-
-  if(!nearestPharmacies.length) {
-    box.innerHTML = '<div class="card glass"><small class="hint">No pharmacies found nearby</small></div>';
-    return;
+  if(suggestedSpecialists.length){
+    response += `<div class="mt8"><strong>Recommended Specialist:</strong> ${suggestedSpecialists.slice(0, 2).join(', ')}</div>`;
   }
 
-  nearestPharmacies.forEach(pharm => {
-    const storeInvKey = `medifind_store_${pharm.store}`;
-    const inventory = storageJSON(storeInvKey) || [];
-
-    if(!inventory.length) return;
-
-    const topMedicines = inventory.slice(0, 3);
-
-    const card = document.createElement('div');
-    card.className = 'card glass';
-    card.innerHTML = `
-      <div class="row space-between">
-        <strong>${pharm.store}</strong>
-        <span class="badge km">${pharm._dist.toFixed(1)} km</span>
-      </div>
-      <div class="hint mt8">Available: ${topMedicines.map(m => m.name).join(', ')}</div>
-      <div class="row gap8 mt8">
-        <button class="btn sm" data-order-pharmacy="${pharm.store}">📦 Order Now</button>
-        <button class="btn outline sm" data-view-pharmacy="${pharm.store}">View All</button>
-      </div>
-    `;
-    box.appendChild(card);
-
-    card.querySelector(`[data-order-pharmacy]`).addEventListener('click', () => {
-      window.selectedPharmacyForOrder = pharm;
-      showOrderModal(pharm);
+  response += `<div class="mt12"><strong>🏪 Nearby Medical Shops (${topPharmacies.length} found ${areaLabel}):</strong><br/>`;
+  if(topPharmacies.length){
+    topPharmacies.forEach((p, i) => {
+      response += `<div class="mt8" style="padding:8px;border:1px solid var(--edge);border-radius:8px;">`;
+      response += `${i+1}. <strong>${p.name}</strong> — ${p.distance.toFixed(1)} km<br/>`;
+      response += `<span class="hint">Stock: ${p.medicines.slice(0, 3).map(m => m.name).join(', ')}</span><br/>`;
+      response += `<button class="btn outline sm mt8" data-route-pharm data-lat="${p.lat}" data-lon="${p.lon}">🗺️ Get Directions</button>`;
+      response += `</div>`;
     });
-  });
-}
+  } else {
+    response += `<span class="hint">No published pharmacies with matching stock nearby. Try searching on Home.</span>`;
+  }
+  response += `</div>`;
 
-function showOrderModal(pharmacy) {
-  const storeInvKey = `medifind_store_${pharmacy.store}`;
-  const inventory = storageJSON(storeInvKey) || [];
+  response += `<div class="mt12"><strong>🏥 Nearby Hospitals (${relevantHospitals.length} found ${areaLabel}):</strong><br/>`;
+  if(relevantHospitals.length){
+    relevantHospitals.forEach((h, i) => {
+      const specs = (h.specialties || []).slice(0, 3).join(', ');
+      response += `<div class="mt8" style="padding:8px;border:1px solid var(--edge);border-radius:8px;">`;
+      response += `${i+1}. <strong>${h.name}</strong> — ${h._dist.toFixed(1)} km<br/>`;
+      response += `<span class="hint">${h.address || 'Kengeri area'} · ${specs}</span><br/>`;
+      response += `<button class="btn outline sm mt8" data-route-hosp data-id="${h.id}" data-lat="${h.lat}" data-lon="${h.lon}" data-name="${h.name}">🗺️ Get Directions</button>`;
+      response += `</div>`;
+    });
+  } else {
+    response += `<span class="hint">No matching hospitals found. Check the Hospitals tab for all nearby options.</span>`;
+  }
+  response += `</div>`;
 
-  let total = 0;
-  let items = [];
+  if(nearestLandmark){
+    response += `<div class="hint mt8">📍 Reference: ~${nearestLandmark.dist.toFixed(1)} km from ${nearestLandmark.name}</div>`;
+  }
+  response += `<div class="hint mt8" style="font-size:12px;">⚠️ This is AI-assisted guidance only — not a diagnosis. Please consult a healthcare professional.</div>`;
 
-  inventory.forEach(med => {
-    items.push(med.name);
-    total += Number(med.price) || 0;
-  });
-
-  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
-
-  $('order-id-display').textContent = orderId;
-  $('order-pharmacy-display').textContent = pharmacy.store;
-  $('order-items-display').textContent = items.slice(0, 3).join(', ') + (items.length > 3 ? '...' : '');
-  $('order-total-display').textContent = (total * Math.min(3, items.length)).toFixed(2);
-  $('order-eta-display').textContent = '30-45 min';
-
-  $('order-confirm-modal').classList.remove('hidden');
-  toast('✅ Your order is placed! Tracking your delivery...', 3000);
-}
-
-function findNearestPharmacies(userLat, userLon, count=5) {
-  if(!userLat || !userLon) userLat=12.9065; userLon=77.4845;
-  let rows = pharmacies.map(p=>{
-    const d=km([userLat,userLon],[p.lat,p.lon]);
-    const hours=p._hours || {hours24:true};
-    const state=isOpenNow(hours);
-    return {...p,_dist:d,_eta:eta(d), _open:state.open, _openLabel:state.label};
-  });
-  rows.sort((a,b)=> a._dist-b._dist);
-  return rows.slice(0, count);
+  addChatMessage('ai', response);
 }
 
 // Hospital Routing
@@ -1890,24 +2108,17 @@ on($('doctor-booking-close'), 'click', () => {
   $('doctor-booking-modal').classList.add('hidden');
 });
 
-on($('order-confirm-close'), 'click', () => {
-  $('order-confirm-modal').classList.add('hidden');
+on($('cancel-doctor-booking'), 'click', () => {
+  $('doctor-booking-modal').classList.add('hidden');
 });
 
 on($('booking-confirm-close'), 'click', () => {
   $('booking-confirm-modal').classList.add('hidden');
 });
 
-on($('cancel-doctor-booking'), 'click', () => {
-  $('doctor-booking-modal').classList.add('hidden');
-});
-
 // Init on page load
 on(window, 'load', () => {
-  if(getCurrentUser()) {
-    renderQuickOrderMedicines();
-    initAIChatbox();
-  }
+  if(getCurrentUser()) initAIChatbox();
 });
 
 

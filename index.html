@@ -33,9 +33,9 @@
     <div class="side-title">Navigate</div>
     <button class="side-btn" data-tab="home">🏠 Home</button>
     <button class="side-btn" data-tab="hospitals">🏥 Hospitals</button>
-    <button class="side-btn" data-tab="orders">📦 Orders</button>
     <button class="side-btn" data-tab="profile">👤 Profile</button>
     <button class="side-btn" data-tab="report">🚩 Report</button>
+    <button class="side-btn" id="side-ai-chat" data-tab="ai-chat">💬 Start AI Chat</button>
     <button class="side-btn" data-tab="settings">⚙️ Settings</button>
   </aside>
 
@@ -148,22 +148,19 @@
       </div>
     </section>
 
-    <!-- Quick Order Medicines Section -->
+    <!-- AI Symptom Assistant -->
     <section class="card lg glass mt12">
-      <h3>📦 Quick Order Medicines</h3>
-      <p class="hint">Order medicines from nearby pharmacies instantly</p>
-      <div id="quick-order-list" class="cards mt8"></div>
+      <h3>🤖 AI Symptom Assistant</h3>
+      <p class="hint">Describe your symptoms — get medicine suggestions, nearby medical shops & hospitals near Kengeri / SJBIT</p>
+      <button id="ai-chat-toggle" class="btn mt8 full">💬 Start AI Chat</button>
     </section>
-
-    <!-- AI Chat Button -->
-    <button id="ai-chat-toggle" class="btn outline mt12 full">💬 Chat with AI Doctor</button>
   </main>
 
   <!-- AI Chatbox Modal -->
   <div id="ai-chat-modal" class="modal hidden" role="dialog" aria-modal="true" style="z-index:1000;">
     <div class="modal-card card glass" style="width:90%;max-width:600px;height:80vh;display:flex;flex-direction:column;">
       <div class="row space-between" style="border-bottom:1px solid var(--edge);padding-bottom:12px;">
-        <h3>🤖 AI Doctor Assistant</h3>
+        <h3>🤖 AI Symptom Assistant</h3>
         <button id="ai-chat-close" class="btn outline sm">Close</button>
       </div>
       <div id="ai-chat-messages" style="flex:1;overflow-y:auto;padding:12px;margin:12px 0;border:1px solid var(--edge);border-radius:8px;"></div>
@@ -177,27 +174,9 @@
         <button class="btn outline sm" data-symptom="cough">😷 Cough</button>
         <button class="btn outline sm" data-symptom="headache">🤕 Headache</button>
         <button class="btn outline sm" data-symptom="cold">❄️ Cold</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Order Confirmation Modal -->
-  <div id="order-confirm-modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="modal-card card glass">
-      <div style="text-align:center;padding:24px;">
-        <div style="font-size:48px;margin-bottom:12px;">✅</div>
-        <h2>Order Placed Successfully!</h2>
-        <div class="form mt12">
-          <div class="card glass" style="background:var(--card);padding:12px;text-align:left;">
-            <strong>Order ID:</strong> <span id="order-id-display">-</span><br/>
-            <strong>Pharmacy:</strong> <span id="order-pharmacy-display">-</span><br/>
-            <strong>Items:</strong> <span id="order-items-display">-</span><br/>
-            <strong>Total:</strong> ₹<span id="order-total-display">0</span><br/>
-            <strong>Estimated Delivery:</strong> <span id="order-eta-display">30-45 min</span>
-          </div>
-          <div class="hint mt12">📍 Your order is confirmed and will be delivered to your location!</div>
-          <button id="order-confirm-close" class="btn full mt12">Close</button>
-        </div>
+        <button class="btn outline sm" data-symptom="allergy">🤧 Allergy</button>
+        <button class="btn outline sm" data-symptom="acidity">🔥 Acidity</button>
+        <button class="btn outline sm" data-symptom="body pain">💪 Body Pain</button>
       </div>
     </div>
   </div>
@@ -446,40 +425,6 @@
     </div>
   </div>
 
-  <!-- Medicine Orders View -->
-  <section id="orders-view" class="view hidden">
-    <div class="card lg glass">
-      <h2>📦 My Medicine Orders</h2>
-      <p class="hint mt8">Track your medicine orders and delivery status</p>
-      <div class="row gap8 mt12">
-        <button id="refresh-orders" class="btn outline sm">Refresh</button>
-        <button id="new-order-btn" class="btn outline sm">New Order</button>
-      </div>
-    </div>
-    <div id="orders-list" class="cards mt12"></div>
-  </section>
-
-  <!-- Order Status Modal -->
-  <div id="order-status-modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="modal-card card glass">
-      <div style="text-align:center;padding:24px;">
-        <div id="order-status-icon" style="font-size:48px;margin-bottom:12px;">✅</div>
-        <h2 id="order-status-title">Order Approved!</h2>
-        <div class="form mt12">
-          <div class="card glass" style="background:var(--card);padding:12px;text-align:left;">
-            <strong>Order ID:</strong> <span id="order-status-id">-</span><br/>
-            <strong>Status:</strong> <span id="order-status-text">Approved</span><br/>
-            <strong>Pharmacy:</strong> <span id="order-status-pharmacy">-</span><br/>
-            <strong>Medicines:</strong> <span id="order-status-items">-</span><br/>
-            <strong>Delivery Time:</strong> <span id="order-status-time">30-45 min</span>
-          </div>
-          <div class="hint mt12">📍 Your order has been approved and is being prepared for delivery!</div>
-          <button id="order-status-close" class="btn full mt12">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Pharmacy Login -->
   <section id="pharmacy-login-view" class="view hidden">
     <div class="card lg glass">
@@ -529,13 +474,6 @@
       </div>
       <div class="divider"></div>
 
-      <!-- Tabs Navigation -->
-      <div class="row gap8 mt8" style="border-bottom:1px solid var(--line);padding-bottom:12px;">
-        <button id="tab-medicines" class="btn outline active" style="border:none;background:transparent;text-decoration:underline;">💊 Medicines</button>
-        <button id="tab-hospitals" class="btn outline" style="border:none;background:transparent;">🏥 Hospital Info</button>
-      </div>
-
-      <!-- Medicines Tab -->
       <div id="medicines-tab" class="tab-content">
         <div class="card glass mt8">
           <h3>Store Location, Hours & Publish</h3>
@@ -574,49 +512,6 @@
             <thead><tr><th>Medicine</th><th>Qty</th><th>₹/tablet</th><th></th></tr></thead>
             <tbody id="inv-body"></tbody>
           </table>
-        </div>
-      </div>
-
-      <!-- Hospital Info Tab -->
-      <div id="hospitals-tab" class="tab-content hidden">
-        <div class="card glass mt8">
-          <h3>Hospital Information</h3>
-          <p class="hint">Add hospital details to help users find your services.</p>
-
-          <div class="form mt12">
-            <label>Hospital Name</label>
-            <input id="hosp-name" type="text" placeholder="Hospital name"/>
-
-            <label>Specialties (comma-separated)</label>
-            <input id="hosp-specialties" type="text" placeholder="e.g., Cardiology, Neurology, Pediatrics"/>
-
-            <label>Contact Number</label>
-            <input id="hosp-contact" type="text" placeholder="Phone number"/>
-
-            <label>Address</label>
-            <textarea id="hosp-address" placeholder="Hospital address..." rows="3"></textarea>
-
-            <label>Open 24/7?</label>
-            <label class="checkline"><input type="checkbox" id="hosp-247"/> Yes</label>
-
-            <div id="hosp-hours" class="hidden">
-              <label>Opening Hours</label>
-              <div class="row gap8">
-                <input id="hosp-open" type="time" value="09:00"/>
-                <input id="hosp-close" type="time" value="21:00"/>
-              </div>
-            </div>
-
-            <div class="row gap8 mt12">
-              <button id="save-hospital" class="btn">Save Hospital Info</button>
-              <button id="clear-hospital" class="btn outline">Clear</button>
-            </div>
-          </div>
-
-          <div id="hospital-info-display" class="card glass mt12 hidden">
-            <h4>Saved Hospital Info</h4>
-            <div id="hospital-info-content"></div>
-          </div>
         </div>
       </div>
     </div>
